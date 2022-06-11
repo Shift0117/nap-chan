@@ -271,7 +271,7 @@ async fn undeafen(ctx: &Context, msg: &Message) -> CommandResult {
 async fn play(_: &Context) -> CommandResult {
     println!("command play called");
     let mut handler: Driver = Default::default();
-    let source = ffmpeg("01 Boot.wav")
+    let source = ffmpeg("music/01 Boot.wav")
         .await
         .expect("This might fail: handle this error!");
     let (mut audio, audio_handle) = create_player(source);
