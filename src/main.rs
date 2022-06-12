@@ -24,7 +24,7 @@ struct Handler;
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, _: Context, ready: Ready) {
-        println!("{} is connected!", ready.user.name);
+        tracing::info!("{} is connected!", ready.user.name);
     }
     async fn voice_state_update(
         &self,
@@ -33,8 +33,8 @@ impl EventHandler for Handler {
         _old: Option<VoiceState>,
         _new: VoiceState,
     ) {
-        println!("{:?}\n{:?}", _old, _new);
-        println!("{} is connected!", _new.member.unwrap().user.name);
+        tracing::info!("{:?}\n{:?}", _old, _new);
+        tracing::info!("{} is connected!", _new.member.unwrap().user.name);
     }
     async fn message(&self, _ctx: Context, _new_message: Message) {
         play_voice(&_ctx, _new_message).await;
@@ -79,11 +79,11 @@ async fn main() {
         let _ = client
             .start()
             .await
-            .map_err(|why| println!("Client ended: {:?}", why));
+            .map_err(|why| tracing::info!("Client ended: {:?}", why));
     });
 
     tokio::signal::ctrl_c().await.unwrap();
-    println!("Received Ctrl-C, shutting down.");
+    tracing::info!("Ctrl-C received, shutting down...");
 }
 
 #[command]
@@ -306,7 +306,7 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
                 "Playing song"
             }
             Err(why) => {
-                println!("Err starting source: {:?}", why);
+                tracing::error!("Err starting source: {:?}", why);
                 "Error sourcing ffmpeg"
             }
         }
