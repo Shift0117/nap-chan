@@ -5,6 +5,7 @@ use serenity::model::id::GuildId;
 use serenity::model::prelude::VoiceState;
 use songbird::{Event, EventContext, SerenityInit, TrackEvent};
 
+use dotenv::dotenv;
 use lib::voice::*;
 use serenity::client::Context;
 use serenity::{
@@ -65,6 +66,7 @@ async fn main() {
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
         .init();
+    dotenv().ok();
     let token = std::env::var("VOICEVOX_TOKEN").expect("environment variable not found");
     let framework = StandardFramework::new()
         .configure(|c| c.prefix(">"))
