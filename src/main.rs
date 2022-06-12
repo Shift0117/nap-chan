@@ -6,11 +6,17 @@
 //! git = "https://github.com/serenity-rs/serenity.git"
 //! features = ["client", "standard_framework", "voice"]
 //! ```
+
+mod lib;
 use std::env;
 use std::fs::File;
 use std::io::BufReader;
 
 use serde::{Serialize, Deserialize};
+use serenity::model::event::{VoiceServerUpdateEvent, TypingStartEvent};
+use serenity::model::guild::Member;
+use serenity::model::id::GuildId;
+use serenity::model::prelude::VoiceState;
 // This trait adds the `register_songbird` and `register_songbird_with` methods
 // to the client builder below, making it easy to install this voice client.
 // The voice client can be retrieved in any command using `songbird::get(ctx).await`.
@@ -18,7 +24,7 @@ use songbird::{SerenityInit, Driver, ffmpeg, create_player};
 
 // Import the `Context` to handle commands.
 use serenity::client::Context;
-
+use lib::voice::*;
 use serenity::{
     async_trait,
     client::{Client, EventHandler},
@@ -40,6 +46,13 @@ impl EventHandler for Handler {
     async fn ready(&self, _: Context, ready: Ready) {
         println!("{} is connected!", ready.user.name);
     }
+    async fn voice_state_update(&self,_ctx:Context, _:Option<GuildId>,_old:Option<VoiceState>,_new:VoiceState) {
+        println!("{:?}\n{:?}",_old,_new);
+        println!("{} is connected!",_new.member.unwrap().user.name);
+    }
+    async fn message(&self,_ctx:Context,_new_message:Message) {
+        play_voice(_new_message);
+    }
 }
 
 #[group]
@@ -51,7 +64,6 @@ struct Token {
     token: String,
 }
 fn get_token(file_name: &str) -> Result<String,()> {
-
     let file = File::open(file_name).unwrap();
     let reader = BufReader::new(file);
     let t: Token = serde_json::from_reader(reader).unwrap();
@@ -65,7 +77,7 @@ async fn main() {
     
     // Configure the client with your Discord bot token in the environment.
     let token = get_token("config.json").expect("Error: Token not Found");
-
+    let mut queue= Vec::<String>::new();
     let framework = StandardFramework::new()
         .configure(|c| c
                    .prefix(">"))
@@ -268,15 +280,36 @@ async fn undeafen(ctx: &Context, msg: &Message) -> CommandResult {
 }
 #[command]
 #[only_in(guilds)]
-async fn play(_: &Context) -> CommandResult {
+async fn play(ctx: &Context,msg:&Message) -> CommandResult {
     println!("command play called");
-    let mut handler: Driver = Default::default();
-    let source = ffmpeg("music/01 Boot.wav")
-        .await
-        .expect("This might fail: handle this error!");
-    let (mut audio, audio_handle) = create_player(source);
-    audio.set_volume(0.5);
-    handler.play_only(audio);
+    let guild = msg.guild(&ctx.cache).await.unwrap();
+    let guild_id = guild.id;
+
+    let manager = songbird::get(ctx).await
+        .expect("Songbird Voice client placed in at initialisation.").clone();
+
+    if let Some(handler_lock) = manager.get(guild_id) {
+        let mut handler = handler_lock.lock().await;
+
+        let source = match songbird::ffmpeg("01_Boot.wav").await {
+            Ok(source) => source,
+            Err(why) => {
+                println!("Err starting source: {:?}", why);
+
+                check_msg(msg.channel_id.say(&ctx.http, "Error sourcing ffmpeg").await);
+
+                return Ok(());
+            },
+        };
+
+        handler.play_source(source);
+
+        check_msg(msg.channel_id.say(&ctx.http, "Playing song").await);
+    } else {
+        check_msg(msg.channel_id.say(&ctx.http, "Not in a voice channel to play in").await);
+    }
+
+
     Ok(())
 }
 
