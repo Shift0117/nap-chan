@@ -1,24 +1,16 @@
-use std::{
-    fs::{self, read_dir, remove_dir_all, File},
-    io::Write,
-    path::Path,
-    sync::{Arc, Mutex},
-};
+use std::io::Write;
 
 use reqwest;
-use serenity::{
-    client::Context,
-    model::{channel::Message},
-};
+use serenity::{client::Context, model::channel::Message};
 use tempfile::{self, NamedTempFile};
-
-
 
 const BASE_URL: &str = "http://127.0.0.1:50031";
 pub async fn play_voice(ctx: &Context, msg: Message) {
-
-
-    let mut temp_file = tempfile::Builder::new().suffix(".wav").rand_bytes(5).tempfile().unwrap();
+    let mut temp_file = tempfile::Builder::new()
+        .suffix(".wav")
+        .rand_bytes(5)
+        .tempfile()
+        .unwrap();
     create_voice(msg.content.clone(), &mut temp_file).await;
     dbg!(&msg.content);
     let guild = msg.guild(&ctx.cache).await.unwrap();
@@ -33,8 +25,6 @@ pub async fn play_voice(ctx: &Context, msg: Message) {
         let mut source = songbird::ffmpeg(&path).await.unwrap();
         source.metadata.source_url = Some(path.to_string_lossy().to_string());
         handler.enqueue_source(source.into());
-
-    } else {
     }
 }
 
@@ -42,7 +32,7 @@ async fn create_voice(text: String, temp_file: &mut NamedTempFile) {
     let params = [("text", text), ("speaker", 1.to_string())];
     let client = reqwest::Client::new();
     let voice_query_url = format!("{}/audio_query", BASE_URL);
-    dbg!(&voice_query_url);
+    dbg!(&voice_query_url, &params);
     let res = client
         .post(voice_query_url)
         .query(&params)
