@@ -1,9 +1,13 @@
 use std::io::Write;
 
+use super::text::Text;
 use reqwest;
-use serenity::{client::Context, model::channel::Message};
+use serenity::{
+    client::Context,
+    model::channel::Message,
+    utils::{content_safe, ContentSafeOptions},
+};
 use tempfile::{self, NamedTempFile};
-
 const BASE_URL: &str = "http://127.0.0.1:50031";
 pub async fn play_voice(ctx: &Context, msg: Message) {
     let mut temp_file = tempfile::Builder::new()
@@ -11,8 +15,12 @@ pub async fn play_voice(ctx: &Context, msg: Message) {
         .rand_bytes(5)
         .tempfile()
         .unwrap();
-    create_voice(msg.content.clone(), &mut temp_file).await;
+    let clean_option = ContentSafeOptions::new();
+    let cleaned = Text::new(content_safe(&ctx.cache, msg.content.clone(), &clean_option).await)
+        .make_read_text();
+    create_voice(&cleaned, &mut temp_file).await;
     dbg!(&msg.content);
+    dbg!(&cleaned);
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
     let (_, path) = temp_file.keep().unwrap();
@@ -28,8 +36,8 @@ pub async fn play_voice(ctx: &Context, msg: Message) {
     }
 }
 
-async fn create_voice(text: String, temp_file: &mut NamedTempFile) {
-    let params = [("text", text), ("speaker", 1.to_string())];
+async fn create_voice(text: &Text, temp_file: &mut NamedTempFile) {
+    let params = [("text", &text.text), ("speaker", &"1".to_string())];
     let client = reqwest::Client::new();
     let voice_query_url = format!("{}/audio_query", BASE_URL);
     dbg!(&voice_query_url, &params);
