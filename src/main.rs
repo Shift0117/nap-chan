@@ -83,7 +83,6 @@ async fn main() {
             .await
             .map_err(|why| tracing::info!("Client ended: {:?}", why));
     });
-
     tokio::signal::ctrl_c().await.unwrap();
     tracing::info!("Ctrl-C received, shutting down...");
 }

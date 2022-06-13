@@ -7,7 +7,11 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+<<<<<<< HEAD
 serenity = {version = "0.10.10",features = ["client", "standard_framework", "voice", "rustls_backend"]}
+=======
+serenity = {version = "0.10.10",features = ["client", "standard_framework", "voice", "rustls_backend","cache"]}
+>>>>>>> 2033ebb016491ad744ef26220606b3a19d3e711a
 serde = "1.0.137"
 serde_json = "1.0.81"
 tokio = {version = "1.19.2",features = ["rt-multi-thread","macros","signal"]}
