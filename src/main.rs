@@ -43,7 +43,7 @@ impl EventHandler for Handler {
 }
 
 #[group]
-#[commands(join, leave, mute, ping, unmute, play, deafen, undeafen)]
+#[commands(join, leave, mute, unmute, play, deafen, undeafen)]
 struct General;
 
 struct TrackEndNotifier;
@@ -175,12 +175,6 @@ async fn mute(ctx: &Context, msg: &Message) -> CommandResult {
         }
     };
     msg.channel_id.say(&ctx.http, content).await?;
-    Ok(())
-}
-
-#[command]
-async fn ping(context: &Context, msg: &Message) -> CommandResult {
-    msg.channel_id.say(&context.http, "Pong!").await?;
     Ok(())
 }
 
