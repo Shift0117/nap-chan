@@ -1,6 +1,9 @@
 mod lib;
+use std::collections::HashMap;
+use std::io::Write;
 use std::path::Path;
 
+use serde_json::to_string;
 use serenity::model::id::GuildId;
 use serenity::model::prelude::VoiceState;
 use songbird::{Event, EventContext, SerenityInit, TrackEvent};
@@ -21,7 +24,10 @@ use serenity::{
     model::{channel::Message, gateway::Ready},
 };
 
-struct Handler;
+struct Handler {
+    dict: HashMap<String, String>,
+}
+
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, _: Context, ready: Ready) {
@@ -38,12 +44,12 @@ impl EventHandler for Handler {
         tracing::info!("{} is connected!", _new.member.unwrap().user.name);
     }
     async fn message(&self, _ctx: Context, _new_message: Message) {
-        play_voice(&_ctx, _new_message).await;
+        play_voice(&_ctx, _new_message, &self.dict).await;
     }
 }
 
 #[group]
-#[commands(join, leave, mute, unmute, play, deafen, undeafen)]
+#[commands(join, leave, mute, unmute, play, deafen, undeafen, add)]
 struct General;
 
 struct TrackEndNotifier;
@@ -67,12 +73,17 @@ async fn main() {
         .with_max_level(tracing::Level::INFO)
         .init();
     dotenv().ok();
-    let token = std::env::var("VOICEVOX_TOKEN").expect("environment variable not found");
+    //let token = std::env::var("VOICEVOX_TOKEN").expect("environment variable not found");
+    let token = "OTgyNjg5MDAxMjI2MDA2NTU5.GEZiDx.WExj8PPH6g_uOWj08Qj77BPDGm-Hx8gxOWiano";
+
+    let dict_file = std::fs::File::open("read_dict.json").unwrap();
+    let reader = std::io::BufReader::new(dict_file);
+    let dict: HashMap<String, String> = serde_json::from_reader(reader).unwrap();
     let framework = StandardFramework::new()
         .configure(|c| c.prefix(">"))
         .group(&GENERAL_GROUP);
     let mut client = Client::builder(&token)
-        .event_handler(Handler)
+        .event_handler(Handler { dict })
         .framework(framework)
         .register_songbird()
         .await
@@ -157,7 +168,6 @@ async fn mute(ctx: &Context, msg: &Message) -> CommandResult {
         Some(handler) => handler,
         None => {
             msg.reply(ctx, "Not in a voice channel").await?;
-
             return Ok(());
         }
     };
@@ -271,7 +281,6 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
             msg.channel_id
                 .say(&ctx.http, "Must provide a URL to a video or audio")
                 .await?;
-
             return Ok(());
         }
     };
@@ -309,5 +318,61 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         "Not in a voice channel to play in"
     };
     msg.channel_id.say(&ctx.http, content).await?;
+    Ok(())
+}
+
+#[command]
+#[only_in(guild)]
+#[num_args(2)]
+async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let before: String = args.single().unwrap();
+    let after: String = args.single().unwrap();
+    dbg!(&before, &after);
+    let dict_file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .append(false)
+        .open("read_dict.json")
+        .unwrap();
+    let reader = std::io::BufReader::new(&dict_file);
+    let mut dict: HashMap<String, String> = serde_json::from_reader(reader).unwrap();
+    dict.insert(before, after);
+    let dict_json = to_string(&dict).unwrap();
+    let mut dict_file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .truncate(true)
+        .open("read_dict.json")
+        .unwrap();
+    dict_file.write_all(dict_json.as_bytes()).unwrap();
+    dict_file.flush().unwrap();
+    Ok(())
+}
+
+#[command]
+#[only_in(guild)]
+#[num_args(1)]
+async fn rem(_: &Context, _: &Message, mut args: Args) -> CommandResult {
+    let before: String = args.single().unwrap();
+    let dict_file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .append(false)
+        .open("read_dict.json")
+        .unwrap();
+    let reader = std::io::BufReader::new(&dict_file);
+    let mut dict: HashMap<String, String> = serde_json::from_reader(reader).unwrap();
+    if dict.contains_key(&before) {
+        dict.remove(&before);
+    }
+    let dict_json = to_string(&dict).unwrap();
+    let mut dict_file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .truncate(true)
+        .open("read_dict.json")
+        .unwrap();
+    dict_file.write_all(dict_json.as_bytes()).unwrap();
+    dict_file.flush().unwrap();
     Ok(())
 }

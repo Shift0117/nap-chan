@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{collections::HashMap, io::Write};
 
 use super::text::Text;
 use reqwest;
@@ -9,7 +9,7 @@ use serenity::{
 };
 use tempfile::{self, NamedTempFile};
 const BASE_URL: &str = "http://127.0.0.1:50031";
-pub async fn play_voice(ctx: &Context, msg: Message) {
+pub async fn play_voice(ctx: &Context, msg: Message, dict: &HashMap<String, String>) {
     let mut temp_file = tempfile::Builder::new()
         .suffix(".wav")
         .rand_bytes(5)
@@ -17,7 +17,7 @@ pub async fn play_voice(ctx: &Context, msg: Message) {
         .unwrap();
     let clean_option = ContentSafeOptions::new();
     let cleaned = Text::new(content_safe(&ctx.cache, msg.content.clone(), &clean_option).await)
-        .make_read_text();
+        .make_read_text(dict);
     create_voice(&cleaned, &mut temp_file).await;
     dbg!(&msg.content);
     dbg!(&cleaned);
