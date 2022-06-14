@@ -73,9 +73,7 @@ async fn main() {
         .with_max_level(tracing::Level::INFO)
         .init();
     dotenv().ok();
-    //let token = std::env::var("VOICEVOX_TOKEN").expect("environment variable not found");
-    let token = "OTgyNjg5MDAxMjI2MDA2NTU5.GEZiDx.WExj8PPH6g_uOWj08Qj77BPDGm-Hx8gxOWiano";
-
+    let token = std::env::var("VOICEVOX_TOKEN").expect("environment variable not found");
     let dict_file = std::fs::File::open("read_dict.json").unwrap();
     let reader = std::io::BufReader::new(dict_file);
     let dict: HashMap<String, String> = serde_json::from_reader(reader).unwrap();
