@@ -10,11 +10,11 @@ edition = "2018"
 serenity = {version = "0.10.10",features = ["client", "standard_framework", "voice", "rustls_backend","cache"]}
 serde = "1.0.137"
 serde_json = "1.0.81"
-tokio = {version = "1.19.2",features = ["rt-multi-thread","macros","signal"]}
+tokio = {version = "1.19.2",features = ["rt-multi-thread","macros","signal","sync"]}
 songbird = {version = "0.2.2",features = ["driver","builtin-queue"]}
-tracing = "0.1"
-tracing-subscriber = "0.2"
-tracing-futures = "0.2"
+tracing = "0.1.35"
+tracing-subscriber = "0.3.11"
+tracing-futures = "0.2.5"
 reqwest = "0.11.10"
 tempfile = "3.3.0"
 dotenv = "0.15.0"

@@ -1,9 +1,15 @@
 mod lib;
-use std::path::Path;
-
+use serde_json::to_string;
+use serenity::framework::standard::Delimiter;
 use serenity::model::id::GuildId;
 use serenity::model::prelude::VoiceState;
+use serenity::prelude::TypeMapKey;
 use songbird::{Event, EventContext, SerenityInit, TrackEvent};
+use std::collections::HashMap;
+use std::io::Write;
+use std::path::Path;
+use std::sync::{Arc, RwLock};
+use tokio::sync::Mutex;
 
 use dotenv::dotenv;
 use lib::voice::*;
@@ -21,7 +27,10 @@ use serenity::{
     model::{channel::Message, gateway::Ready},
 };
 
+const DICT_PATH: &str = "read_dict.json";
+
 struct Handler;
+
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, _: Context, ready: Ready) {
@@ -37,13 +46,22 @@ impl EventHandler for Handler {
         tracing::info!("{:?}\n{:?}", _old, _new);
         tracing::info!("{} is connected!", _new.member.unwrap().user.name);
     }
-    async fn message(&self, _ctx: Context, _new_message: Message) {
-        play_voice(&_ctx, _new_message).await;
+    async fn message(&self, ctx: Context, msg: Message) {
+        /*if let Some((_, args)) = msg.content.split_once(">add") {
+            add(&ctx, &msg, Args::new(&args, &[Delimiter::Single(' ')]))
+                .await
+                .ok();
+            let dict_file = std::fs::File::open(DICT_PATH).unwrap();
+            let reader = std::io::BufReader::new(dict_file);
+            let dict: HashMap<String, String> = serde_json::from_reader(reader).unwrap();
+            //self.dict = dict;
+        }*/
+        play_voice(&ctx, msg).await;
     }
 }
 
 #[group]
-#[commands(join, leave, mute, ping, unmute, play, deafen, undeafen)]
+#[commands(join, leave, mute, unmute, play, deafen, undeafen, add)]
 struct General;
 
 struct TrackEndNotifier;
@@ -61,6 +79,12 @@ impl songbird::EventHandler for TrackEndNotifier {
     }
 }
 
+struct DictHandler;
+
+impl TypeMapKey for DictHandler {
+    type Value = Arc<Mutex<HashMap<String, String>>>;
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
@@ -68,6 +92,9 @@ async fn main() {
         .init();
     dotenv().ok();
     let token = std::env::var("VOICEVOX_TOKEN").expect("environment variable not found");
+    let dict_file = std::fs::File::open(DICT_PATH).unwrap();
+    let reader = std::io::BufReader::new(dict_file);
+    let dict: HashMap<String, String> = serde_json::from_reader(reader).unwrap();
     let framework = StandardFramework::new()
         .configure(|c| c.prefix(">"))
         .group(&GENERAL_GROUP);
@@ -77,12 +104,17 @@ async fn main() {
         .register_songbird()
         .await
         .expect("Err creating client");
+    {
+        let mut data = client.data.write().await;
+        data.insert::<DictHandler>(Arc::new(Mutex::new(dict)));
+    }
     tokio::spawn(async move {
         let _ = client
             .start()
             .await
             .map_err(|why| tracing::info!("Client ended: {:?}", why));
     });
+
     tokio::signal::ctrl_c().await.unwrap();
     tracing::info!("Ctrl-C received, shutting down...");
 }
@@ -157,7 +189,6 @@ async fn mute(ctx: &Context, msg: &Message) -> CommandResult {
         Some(handler) => handler,
         None => {
             msg.reply(ctx, "Not in a voice channel").await?;
-
             return Ok(());
         }
     };
@@ -174,12 +205,6 @@ async fn mute(ctx: &Context, msg: &Message) -> CommandResult {
         }
     };
     msg.channel_id.say(&ctx.http, content).await?;
-    Ok(())
-}
-
-#[command]
-async fn ping(context: &Context, msg: &Message) -> CommandResult {
-    msg.channel_id.say(&context.http, "Pong!").await?;
     Ok(())
 }
 
@@ -277,7 +302,6 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
             msg.channel_id
                 .say(&ctx.http, "Must provide a URL to a video or audio")
                 .await?;
-
             return Ok(());
         }
     };
@@ -286,7 +310,6 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         msg.channel_id
             .say(&ctx.http, "Must provide a valid URL")
             .await?;
-
         return Ok(());
     }
 
@@ -315,5 +338,58 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
         "Not in a voice channel to play in"
     };
     msg.channel_id.say(&ctx.http, content).await?;
+    Ok(())
+}
+
+#[command]
+#[only_in(guild)]
+#[num_args(2)]
+async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let before: String = args.single().unwrap();
+    let after: String = args.single().unwrap();
+    dbg!(&before, &after);
+    let dict_lock = {
+        let data_read = ctx.data.read().await;
+        data_read.get::<DictHandler>().unwrap().clone()
+    };
+    let mut dict = dict_lock.lock().await;
+    dict.insert(before, after);
+    let dict = dict.clone();
+    let dict_json = to_string(&dict).unwrap();
+    let mut dict_file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .truncate(true)
+        .open(DICT_PATH)
+        .unwrap();
+    dict_file.write_all(dict_json.as_bytes()).unwrap();
+    dict_file.flush().unwrap();
+
+    Ok(())
+}
+
+#[command]
+#[only_in(guild)]
+#[num_args(1)]
+async fn rem(ctx: &Context, _: &Message, mut args: Args) -> CommandResult {
+    let before: String = args.single().unwrap();
+    let dict_lock = {
+        let data_read = ctx.data.read().await;
+        data_read.get::<DictHandler>().unwrap().clone()
+    };
+    let mut dict = dict_lock.lock().await;
+    if dict.contains_key(&before) {
+        dict.remove(&before);
+    }
+    let dict = dict.clone();
+    let dict_json = to_string(&dict).unwrap();
+    let mut dict_file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .truncate(true)
+        .open("read_dict.json")
+        .unwrap();
+    dict_file.write_all(dict_json.as_bytes()).unwrap();
+    dict_file.flush().unwrap();
     Ok(())
 }
