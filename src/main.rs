@@ -1,6 +1,5 @@
 mod lib;
 use serde_json::to_string;
-use serenity::framework::standard::Delimiter;
 use serenity::model::id::GuildId;
 use serenity::model::prelude::VoiceState;
 use serenity::prelude::TypeMapKey;
@@ -8,7 +7,7 @@ use songbird::{Event, EventContext, SerenityInit, TrackEvent};
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use dotenv::dotenv;
@@ -47,21 +46,12 @@ impl EventHandler for Handler {
         tracing::info!("{} is connected!", _new.member.unwrap().user.name);
     }
     async fn message(&self, ctx: Context, msg: Message) {
-        /*if let Some((_, args)) = msg.content.split_once(">add") {
-            add(&ctx, &msg, Args::new(&args, &[Delimiter::Single(' ')]))
-                .await
-                .ok();
-            let dict_file = std::fs::File::open(DICT_PATH).unwrap();
-            let reader = std::io::BufReader::new(dict_file);
-            let dict: HashMap<String, String> = serde_json::from_reader(reader).unwrap();
-            //self.dict = dict;
-        }*/
         play_voice(&ctx, msg).await;
     }
 }
 
 #[group]
-#[commands(join, leave, mute, unmute, play, deafen, undeafen, add)]
+#[commands(join, leave, mute, unmute, play, add)]
 struct General;
 
 struct TrackEndNotifier;
@@ -233,65 +223,7 @@ async fn unmute(ctx: &Context, msg: &Message) -> CommandResult {
     Ok(())
 }
 
-#[command]
-#[only_in(guilds)]
-async fn deafen(ctx: &Context, msg: &Message) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).await.unwrap();
-    let guild_id = guild.id;
 
-    let manager = songbird::get(ctx)
-        .await
-        .expect("Songbird Voice client placed in at initialisation.")
-        .clone();
-
-    let handler_lock = match manager.get(guild_id) {
-        Some(handler) => handler,
-        None => {
-            msg.reply(ctx, "Not in a voice channel").await?;
-
-            return Ok(());
-        }
-    };
-
-    let mut handler = handler_lock.lock().await;
-
-    let content = if handler.is_deaf() {
-        "Already deafened".to_string()
-    } else {
-        if let Err(e) = handler.deafen(true).await {
-            format!("Failed: {:?}", e)
-        } else {
-            "Deafened".to_string()
-        }
-    };
-    msg.channel_id.say(&ctx.http, content).await?;
-    Ok(())
-}
-
-#[command]
-#[only_in(guilds)]
-async fn undeafen(ctx: &Context, msg: &Message) -> CommandResult {
-    let guild = msg.guild(&ctx.cache).await.unwrap();
-    let guild_id = guild.id;
-
-    let manager = songbird::get(ctx)
-        .await
-        .expect("Songbird Voice client placed in at initialisation.")
-        .clone();
-
-    let content = if let Some(handler_lock) = manager.get(guild_id) {
-        let mut handler = handler_lock.lock().await;
-        if let Err(e) = handler.deafen(false).await {
-            format!("Failed: {:?}", e)
-        } else {
-            "Undeafened".to_string()
-        }
-    } else {
-        "Not in a voice channel to undeafen in".to_string()
-    };
-    msg.channel_id.say(&ctx.http, content).await?;
-    Ok(())
-}
 
 #[command]
 #[only_in(guilds)]
@@ -344,7 +276,7 @@ async fn play(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 #[command]
 #[only_in(guild)]
 #[num_args(2)]
-async fn add(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+async fn add(ctx: &Context, _msg: &Message, mut args: Args) -> CommandResult {
     let before: String = args.single().unwrap();
     let after: String = args.single().unwrap();
     dbg!(&before, &after);

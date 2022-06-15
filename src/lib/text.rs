@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use regex;
 use serenity::client::Context;
 
