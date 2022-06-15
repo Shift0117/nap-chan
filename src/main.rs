@@ -1,6 +1,8 @@
 mod lib;
 use serde_json::to_string;
+use serenity::http::Http;
 use serenity::model::id::GuildId;
+use serenity::model::interactions::{application_command, Interaction, InteractionResponseType};
 use serenity::model::prelude::VoiceState;
 use serenity::prelude::TypeMapKey;
 use songbird::{Event, EventContext, SerenityInit, TrackEvent};
@@ -12,7 +14,7 @@ use tokio::sync::Mutex;
 
 use dotenv::dotenv;
 use lib::voice::*;
-use serenity::client::Context;
+use serenity::client::{ClientBuilder, Context};
 use serenity::{
     async_trait,
     client::{Client, EventHandler},
@@ -32,8 +34,42 @@ struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
-    async fn ready(&self, _: Context, ready: Ready) {
+    async fn ready(&self, ctx: Context, ready: Ready) {
         tracing::info!("{} is connected!", ready.user.name);
+        dotenv().ok();
+
+        let guild_id = GuildId(
+            std::env::var("GUILD_ID")
+                .expect("Expected GUILD_ID in environment")
+                .parse()
+                .expect("GUILD_ID must be an integer"),
+        );
+        let commands = GuildId::set_application_commands(&guild_id, &ctx.http, |commands| {
+            commands
+                .create_application_command(|command| {
+                    command.name("ping").description("A ping command")
+                })
+                .create_application_command(|command| {
+                    command
+                        .name("join")
+                        .description("なこちゃんに来てもらいます")
+                })
+        })
+        .await;
+        println!(
+            "I now have the following guild slash commands: {:#?}",
+            commands
+        );
+        let guild_command = serenity::model::interactions::application_command::ApplicationCommand::
+        create_global_application_command(&ctx.http, |command| {
+            command.name("wonderful_command").description("An amazing command")
+        })
+        
+        .await;
+        println!(
+            "I created the following global slash command: {:#?}",
+            guild_command
+        );
     }
     async fn voice_state_update(
         &self,
@@ -46,7 +82,50 @@ impl EventHandler for Handler {
         tracing::info!("{} is connected!", _new.member.unwrap().user.name);
     }
     async fn message(&self, ctx: Context, msg: Message) {
-        play_voice(&ctx, msg).await;
+        dbg!(&msg.guild_id);
+        
+        let guild = msg.guild(&ctx.cache).await.unwrap();
+        
+        if guild
+            .members
+            .contains_key(&ctx.cache.current_user_id().await) && false
+        {
+            play_voice(&ctx, msg).await;
+        };
+    }
+    async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
+        if let Interaction::ApplicationCommand(command) = interaction {
+            println!("Received command interaction: {:#?}", command);
+            let content = match command.data.name.as_str() {
+                "ping" => "Hey, I'm alive!".to_string(),
+                "join" => {
+                    let guild_id = command.guild_id.unwrap();
+                    let channel_id = command.channel_id;
+                    let connect_to = channel_id;
+                    let manager = songbird::get(&ctx)
+                        .await
+                        .expect("Songbird Voice client placed in at initialisation.")
+                        .clone();                    
+                    let (handle_lock, _) = manager.join(guild_id, connect_to).await;
+                    let mut handle = handle_lock.lock().await;
+                    handle.deafen(true).await.unwrap();
+                    handle.add_global_event(Event::Track(TrackEvent::End), TrackEndNotifier);
+                    "こんにちは".to_string()
+                }
+                _ => "not implemented :(".to_string(),
+            };
+
+            if let Err(why) = command
+                .create_interaction_response(&ctx.http, |response| {
+                    response
+                        .kind(InteractionResponseType::ChannelMessageWithSource)
+                        .interaction_response_data(|message| message.content(content))
+                })
+                .await
+            {
+                println!("Cannot respond to slash command: {}", why);
+            }
+        }
     }
 }
 
@@ -81,6 +160,7 @@ async fn main() {
         .with_max_level(tracing::Level::INFO)
         .init();
     dotenv().ok();
+    let application_id = std::env::var("APP_ID").unwrap().parse().unwrap();
     let token = std::env::var("VOICEVOX_TOKEN").expect("environment variable not found");
     let dict_file = std::fs::File::open(DICT_PATH).unwrap();
     let reader = std::io::BufReader::new(dict_file);
@@ -88,12 +168,13 @@ async fn main() {
     let framework = StandardFramework::new()
         .configure(|c| c.prefix(">"))
         .group(&GENERAL_GROUP);
-    let mut client = Client::builder(&token)
-        .event_handler(Handler)
-        .framework(framework)
-        .register_songbird()
-        .await
-        .expect("Err creating client");
+    let mut client =
+        ClientBuilder::new_with_http(Http::new_with_token_application_id(&token, application_id))
+            .event_handler(Handler)
+            .framework(framework)
+            .register_songbird()
+            .await
+            .expect("Err creating client");
     {
         let mut data = client.data.write().await;
         data.insert::<DictHandler>(Arc::new(Mutex::new(dict)));
