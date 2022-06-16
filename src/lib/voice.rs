@@ -11,10 +11,7 @@ use tempfile::{self, NamedTempFile};
 const BASE_URL: &str = "http://127.0.0.1:50031";
 pub async fn play_voice(ctx: &Context, msg: Message) {
     let mut temp_file = tempfile::Builder::new()
-        .suffix(".wav")
-        .rand_bytes(5)
-        .tempfile()
-        .unwrap();
+        .tempfile_in("temp").unwrap();
     let clean_option = ContentSafeOptions::new();
     let cleaned = Text::new(content_safe(&ctx.cache, msg.content.clone(), &clean_option).await)
         .make_read_text(&ctx)

@@ -258,7 +258,8 @@ async fn main() {
             .await
             .map_err(|why| tracing::info!("Client ended: {:?}", why));
     });
-
     tokio::signal::ctrl_c().await.unwrap();
+    std::fs::remove_dir_all("temp").unwrap();
+    std::fs::create_dir("temp").unwrap();
     tracing::info!("Ctrl-C received, shutting down...");
 }
