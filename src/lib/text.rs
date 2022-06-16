@@ -1,8 +1,6 @@
-use std::{collections::HashMap, sync::Arc};
 
 use regex;
-use serenity::{client::Context, prelude::TypeMapKey};
-use tokio::sync::Mutex;
+use serenity::client::Context;
 
 use crate::commands::dict::DictHandler;
 pub const DICT_PATH: &str = "read_dict.json";
@@ -30,9 +28,7 @@ impl Text {
             let data_read = ctx.data.read().await;
             data_read.get::<DictHandler>().unwrap().clone()
         };
-        dbg!(&dicts_lock);
         let dicts = dicts_lock.lock().await;
-        dbg!(&dicts);
         for (k, v) in dicts.dict.iter() {
             text = text.replace(k, v);
         }

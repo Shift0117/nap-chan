@@ -118,15 +118,6 @@ impl EventHandler for Handler {
             "I now have the following guild slash commands: {:#?}",
             commands
         );
-        {
-            let dicts_lock = {
-                let data_read = ctx.data.read().await;
-                data_read.get::<DictHandler>().unwrap().clone()
-            };
-            dbg!(&dicts_lock);
-            let dicts = dicts_lock.lock().await;
-            dbg!(&dicts);
-        }
     }
     async fn voice_state_update(
         &self,
@@ -147,7 +138,7 @@ impl EventHandler for Handler {
             .unwrap();
         let user_id = new.user_id;
         if nako_id.0 == user_id.0 {
-            return ;
+            return;
         }
         let user_name = &new.member.as_ref().unwrap().user.name;
         let dicts_lock = {
@@ -156,40 +147,38 @@ impl EventHandler for Handler {
         };
         let dicts = dicts_lock.lock().await;
 
-        {
-            if new.channel_id != Some(channel_id) {
-                // disconnect
-                let new = HashMap::new();
-                let bye = "ばいばい".to_string();
-                let greet_text = dicts
-                    .greeting_dict
-                    .get(&user_id)
-                    .unwrap_or(&new)
-                    .get("bye")
-                    .unwrap_or(&bye)
-                    .clone();
-                drop(dicts);
-                let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
-                    .make_read_text(&ctx)
-                    .await;
-                play_raw_voice(&ctx, &text.text, guild_id.unwrap()).await;
-            } else {
-                // connect
-                let new = HashMap::new();
-                let hello = "こんにちは".to_string();
-                let greet_text = dicts
-                    .greeting_dict
-                    .get(&user_id)
-                    .unwrap_or(&new)
-                    .get("hello")
-                    .unwrap_or(&hello)
-                    .clone();
-                drop(dicts);
-                let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
-                    .make_read_text(&ctx)
-                    .await;
-                play_raw_voice(&ctx, &text.text, guild_id.unwrap()).await;
-            }
+        if new.channel_id != Some(channel_id) {
+            // disconnect
+            let new = HashMap::new();
+            let bye = "ばいばい".to_string();
+            let greet_text = dicts
+                .greeting_dict
+                .get(&user_id)
+                .unwrap_or(&new)
+                .get("bye")
+                .unwrap_or(&bye)
+                .clone();
+            drop(dicts);
+            let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
+                .make_read_text(&ctx)
+                .await;
+            play_raw_voice(&ctx, &text.text, guild_id.unwrap()).await;
+        } else {
+            // connect
+            let new = HashMap::new();
+            let hello = "こんにちは".to_string();
+            let greet_text = dicts
+                .greeting_dict
+                .get(&user_id)
+                .unwrap_or(&new)
+                .get("hello")
+                .unwrap_or(&hello)
+                .clone();
+            drop(dicts);
+            let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
+                .make_read_text(&ctx)
+                .await;
+            play_raw_voice(&ctx, &text.text, guild_id.unwrap()).await;
         }
 
         tracing::info!("{:?}\n{:?}", old, new);
