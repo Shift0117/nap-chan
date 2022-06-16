@@ -1,13 +1,24 @@
-use std::{io::Write};
+use std::{collections::HashMap, io::Write, sync::Arc};
 
 use serde_json::to_string;
 use serenity::{
-    client::Context, 
-    model::interactions::application_command::ApplicationCommandInteraction,
+    client::Context, model::{interactions::application_command::ApplicationCommandInteraction, id::UserId},
+    prelude::TypeMapKey,
 };
+use tokio::sync::Mutex;
 type SlashCommandResult = Result<String, String>;
+pub struct DictHandler;
 
-use crate::lib::text::{DictHandler, DICT_PATH};
+#[derive(Debug)]
+pub struct Dicts {
+    pub dict: HashMap<String, String>,
+    pub greeting_dict: HashMap<UserId, HashMap<String, String>>,
+}
+
+impl TypeMapKey for DictHandler {
+    type Value = Arc<Mutex<Dicts>>;
+}
+use crate::lib::text::{DICT_PATH, GREETING_DICT_PATH};
 
 pub async fn add(
     ctx: &Context,
@@ -20,7 +31,8 @@ pub async fn add(
         let data_read = ctx.data.read().await;
         data_read.get::<DictHandler>().unwrap().clone()
     };
-    let mut dict = dict_lock.lock().await;
+    let mut dicts = dict_lock.lock().await;
+    let dict = &mut dicts.dict;
     dict.insert(before.to_string(), after.to_string());
     let dict = dict.clone();
     let dict_json = to_string(&dict).unwrap();
@@ -32,8 +44,7 @@ pub async fn add(
         .unwrap();
     dict_file.write_all(dict_json.as_bytes()).unwrap();
     dict_file.flush().unwrap();
-
-    Ok(format!("これからは{}って読むね",after))
+    Ok(format!("これからは{}って読むね", after))
 }
 
 pub async fn rem(
@@ -41,15 +52,15 @@ pub async fn rem(
     _command: &ApplicationCommandInteraction,
     word: &str,
 ) -> SlashCommandResult {
-    let dict_lock = {
+    let dicts_lock = {
         let data_read = ctx.data.read().await;
         data_read.get::<DictHandler>().unwrap().clone()
     };
-    let mut dict = dict_lock.lock().await;
-    if dict.contains_key(word) {
-        dict.remove(word);
+    let mut dicts = dicts_lock.lock().await;
+    if dicts.dict.contains_key(word) {
+        dicts.dict.remove(word);
     }
-    let dict = dict.clone();
+    let dict = dicts.dict.clone();
     let dict_json = to_string(&dict).unwrap();
     let mut dict_file = std::fs::OpenOptions::new()
         .read(true)
@@ -59,5 +70,38 @@ pub async fn rem(
         .unwrap();
     dict_file.write_all(dict_json.as_bytes()).unwrap();
     dict_file.flush().unwrap();
-    Ok(format!("これからは{}って読むね",word))
+    Ok(format!("これからは{}って読むね", word))
+}
+
+pub async fn hello(
+    ctx: &Context,
+    command: &ApplicationCommandInteraction,
+    greet: &str,
+) -> SlashCommandResult {
+    let dict_lock = {
+        let data_read = ctx.data.read().await;
+        data_read.get::<DictHandler>().unwrap().clone()
+    };
+    let mut dicts = dict_lock.lock().await;
+    let greeting_dict = &mut dicts.greeting_dict;
+    let author_id = command.member.as_ref().unwrap().user.id;
+    greeting_dict
+        .entry(author_id)
+        .or_insert(HashMap::new())
+        .insert("hello".to_string(), greet.to_string());
+    let greeting_dict_json = to_string(&greeting_dict).unwrap();
+    dbg!(&greeting_dict_json);
+    let mut dict_file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .truncate(true)
+        .open(GREETING_DICT_PATH)
+        .unwrap();
+    dict_file.write_all(greeting_dict_json.as_bytes()).unwrap();
+    dict_file.flush().unwrap();
+    Ok(format!(
+        "{}さん、これから{}ってあいさつするね",
+        command.member.as_ref().unwrap().user.name,
+        greet
+    ))
 }

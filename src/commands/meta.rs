@@ -1,11 +1,10 @@
 use serenity::{
-    client::Context, 
-    model::interactions::application_command::ApplicationCommandInteraction,
+    client::Context, model::interactions::application_command::ApplicationCommandInteraction,
 };
 use songbird::{Event, TrackEvent};
 type SlashCommandResult = Result<String, String>;
 
-use crate::TrackEndNotifier;
+use crate::{TrackEndNotifier, commands::dict::DictHandler};
 pub async fn join(ctx: &Context, command: &ApplicationCommandInteraction) -> SlashCommandResult {
     let guild_id = command.guild_id.unwrap();
     let author_id = command.member.as_ref().unwrap().user.id;
@@ -24,10 +23,13 @@ pub async fn join(ctx: &Context, command: &ApplicationCommandInteraction) -> Sla
         .await
         .expect("Songbird Voice client placed in at initialisation.")
         .clone();
-    let (handle_lock, _) = manager.join(guild_id, connect_to).await;
-    let mut handle = handle_lock.lock().await;
-    handle.deafen(true).await.unwrap();
-    handle.add_global_event(Event::Track(TrackEvent::End), TrackEndNotifier);
+    {
+        let (handle_lock, _) = manager.join(guild_id, connect_to).await;
+        let mut handle = handle_lock.lock().await;
+        handle.deafen(true).await.unwrap();
+        handle.add_global_event(Event::Track(TrackEvent::End), TrackEndNotifier);
+    }
+    
     Ok("おはよ！".to_string())
 }
 
@@ -39,10 +41,7 @@ pub async fn leave(ctx: &Context, command: &ApplicationCommandInteraction) -> Sl
         .clone();
     let has_handler = manager.get(guild_id).is_some();
     if has_handler {
-        manager
-            .remove(guild_id)
-            .await
-            .map_err(|e| e.to_string())?;
+        manager.remove(guild_id).await.map_err(|e| e.to_string())?;
         Ok("ばいばい".to_string())
     } else {
         Err("ボイスチャンネルに入ってないよ".to_string())

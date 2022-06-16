@@ -1,4 +1,4 @@
 /target
 /.env
-read_dict.json
+*.json
 /temp

@@ -5,7 +5,7 @@ use dotenv::dotenv;
 use lib::voice::*;
 use serenity::client::{ClientBuilder, Context};
 use serenity::http::Http;
-use serenity::model::id::GuildId;
+use serenity::model::id::{GuildId, UserId};
 use serenity::model::interactions::{application_command, Interaction, InteractionResponseType};
 use serenity::model::prelude::VoiceState;
 use serenity::{
@@ -20,8 +20,8 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::lib::text::{DictHandler, DICT_PATH};
-
+use crate::commands::dict::DictHandler;
+use crate::lib::text::{DICT_PATH, GREETING_DICT_PATH};
 struct Handler;
 
 #[async_trait]
@@ -29,7 +29,15 @@ impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
         tracing::info!("{} is connected!", ready.user.name);
         dotenv().ok();
-
+        {
+            let dicts_lock = {
+                let data_read = ctx.data.read().await;
+                data_read.get::<DictHandler>().unwrap().clone()
+            };
+            dbg!(&dicts_lock);
+            let dicts = dicts_lock.lock().await;
+            dbg!(&dicts);
+        }
         let guild_id = GuildId(
             std::env::var("GUILD_ID")
                 .expect("Expected GUILD_ID in environment")
@@ -92,23 +100,100 @@ impl EventHandler for Handler {
                         .name("unmute")
                         .description("なこちゃんのミュートを解除します")
                 })
+                .create_application_command(|command| {
+                    command
+                        .name("hello")
+                        .description("入った時のあいさつを変えます")
+                        .create_option(|option| {
+                            option
+                                .kind(application_command::ApplicationCommandOptionType::String)
+                                .required(true)
+                                .name("greet")
+                                .description("string")
+                        })
+                })
         })
         .await;
         println!(
             "I now have the following guild slash commands: {:#?}",
             commands
         );
-
+        {
+            let dicts_lock = {
+                let data_read = ctx.data.read().await;
+                data_read.get::<DictHandler>().unwrap().clone()
+            };
+            dbg!(&dicts_lock);
+            let dicts = dicts_lock.lock().await;
+            dbg!(&dicts);
+        }
     }
     async fn voice_state_update(
         &self,
-        _ctx: Context,
-        _: Option<GuildId>,
-        _old: Option<VoiceState>,
-        _new: VoiceState,
+        ctx: Context,
+        guild_id: Option<GuildId>,
+        old: Option<VoiceState>,
+        new: VoiceState,
     ) {
-        tracing::info!("{:?}\n{:?}", _old, _new);
-        tracing::info!("{} is connected!", _new.member.unwrap().user.name);
+        let nako_id = &ctx.cache.current_user_id().await;
+        let channel_id = guild_id
+            .unwrap()
+            .to_guild_cached(&ctx.cache)
+            .await
+            .unwrap()
+            .voice_states
+            .get(&nako_id)
+            .and_then(|voice_state| voice_state.channel_id)
+            .unwrap();
+        let user_id = new.user_id;
+        if nako_id.0 == user_id.0 {
+            return ;
+        }
+        let user_name = &new.member.as_ref().unwrap().user.name;
+        let dicts_lock = {
+            let data_read = ctx.data.read().await;
+            data_read.get::<DictHandler>().unwrap().clone()
+        };
+        let dicts = dicts_lock.lock().await;
+
+        {
+            if new.channel_id != Some(channel_id) {
+                // disconnect
+                let new = HashMap::new();
+                let bye = "ばいばい".to_string();
+                let greet_text = dicts
+                    .greeting_dict
+                    .get(&user_id)
+                    .unwrap_or(&new)
+                    .get("bye")
+                    .unwrap_or(&bye)
+                    .clone();
+                drop(dicts);
+                let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
+                    .make_read_text(&ctx)
+                    .await;
+                play_raw_voice(&ctx, &text.text, guild_id.unwrap()).await;
+            } else {
+                // connect
+                let new = HashMap::new();
+                let hello = "こんにちは".to_string();
+                let greet_text = dicts
+                    .greeting_dict
+                    .get(&user_id)
+                    .unwrap_or(&new)
+                    .get("hello")
+                    .unwrap_or(&hello)
+                    .clone();
+                drop(dicts);
+                let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
+                    .make_read_text(&ctx)
+                    .await;
+                play_raw_voice(&ctx, &text.text, guild_id.unwrap()).await;
+            }
+        }
+
+        tracing::info!("{:?}\n{:?}", old, new);
+        tracing::info!("{} is connected!", new.member.unwrap().user.name);
     }
     async fn message(&self, ctx: Context, msg: Message) {
         let guild = msg.guild(&ctx.cache).await.unwrap();
@@ -132,6 +217,7 @@ impl EventHandler for Handler {
             .map(|member| member.user.id)
             .collect::<Vec<_>>();
         if members.contains(&ctx.cache.current_user_id().await) {
+            dbg!(&msg);
             play_voice(&ctx, msg).await;
         };
     }
@@ -139,12 +225,8 @@ impl EventHandler for Handler {
         if let Interaction::ApplicationCommand(command) = interaction {
             println!("Received command interaction: {:#?}", command);
             let content = match command.data.name.as_str() {
-                "join" => {
-                    meta::join(&ctx, &command).await
-                }
-                "leave" => {
-                    meta::leave(&ctx, &command).await
-                }
+                "join" => meta::join(&ctx, &command).await,
+                "leave" => meta::leave(&ctx, &command).await,
                 "add" => {
                     let options = &command.data.options;
                     let before = options
@@ -189,11 +271,22 @@ impl EventHandler for Handler {
                         unreachable!()
                     }
                 }
-                "mute" => {
-                    meta::mute(&ctx, &command).await
-                }
-                "unmute" => {
-                    meta::unmute(&ctx, &command).await
+                "mute" => meta::mute(&ctx, &command).await,
+                "unmute" => meta::unmute(&ctx, &command).await,
+                "hello" => {
+                    let greet = &command
+                        .data
+                        .options
+                        .get(0)
+                        .expect("Expected string")
+                        .resolved
+                        .as_ref()
+                        .expect("Expected string");
+                    if let application_command::ApplicationCommandInteractionDataOptionValue::String(greet) = greet {
+                        dict::hello(&ctx,&command,&greet).await
+                    } else {
+                        unreachable!()
+                    }
                 }
                 _ => Err("未実装だよ！".to_string()),
             };
@@ -201,10 +294,12 @@ impl EventHandler for Handler {
                 .create_interaction_response(&ctx.http, |response| {
                     response
                         .kind(InteractionResponseType::ChannelMessageWithSource)
-                        .interaction_response_data(|message| message.content(match content {
-                            Ok(content) => content,
-                            Err(error) => format!("エラー: {}",error).to_string()
-                        }))
+                        .interaction_response_data(|message| {
+                            message.content(match content {
+                                Ok(content) => content,
+                                Err(error) => format!("エラー: {}", error).to_string(),
+                            })
+                        })
                 })
                 .await
             {
@@ -240,6 +335,14 @@ async fn main() {
     let dict_file = std::fs::File::open(DICT_PATH).unwrap();
     let reader = std::io::BufReader::new(dict_file);
     let dict: HashMap<String, String> = serde_json::from_reader(reader).unwrap();
+    let greeting_dict_file = std::fs::File::open(GREETING_DICT_PATH).unwrap();
+    let greeting_reader = std::io::BufReader::new(greeting_dict_file);
+    let greeting_dict: HashMap<UserId, HashMap<String, String>> =
+        serde_json::from_reader(greeting_reader).unwrap();
+    let dicts = dict::Dicts {
+        dict,
+        greeting_dict,
+    };
     let framework = StandardFramework::new().configure(|c| c.prefix(">"));
     let mut client =
         ClientBuilder::new_with_http(Http::new_with_token_application_id(&token, application_id))
@@ -250,7 +353,7 @@ async fn main() {
             .expect("Err creating client");
     {
         let mut data = client.data.write().await;
-        data.insert::<DictHandler>(Arc::new(Mutex::new(dict)));
+        data.insert::<DictHandler>(Arc::new(Mutex::new(dicts)));
     }
     tokio::spawn(async move {
         let _ = client
