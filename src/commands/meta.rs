@@ -1,9 +1,12 @@
-use serenity::{client::Context, model::interactions::application_command::ApplicationCommandInteraction, framework::standard::CommandResult};
-use songbird::{TrackEvent, Event};
+use serenity::{
+    client::Context, 
+    model::interactions::application_command::ApplicationCommandInteraction,
+};
+use songbird::{Event, TrackEvent};
+type SlashCommandResult = Result<String, String>;
 
 use crate::TrackEndNotifier;
-
-pub async fn join(ctx: &Context, command: &ApplicationCommandInteraction) -> CommandResult {
+pub async fn join(ctx: &Context, command: &ApplicationCommandInteraction) -> SlashCommandResult {
     let guild_id = command.guild_id.unwrap();
     let author_id = command.member.as_ref().unwrap().user.id;
     let channel_id = command
@@ -25,10 +28,10 @@ pub async fn join(ctx: &Context, command: &ApplicationCommandInteraction) -> Com
     let mut handle = handle_lock.lock().await;
     handle.deafen(true).await.unwrap();
     handle.add_global_event(Event::Track(TrackEvent::End), TrackEndNotifier);
-    Ok(())
+    Ok("おはよ！".to_string())
 }
 
-pub async fn leave(ctx: &Context, command: &ApplicationCommandInteraction) -> CommandResult {
+pub async fn leave(ctx: &Context, command: &ApplicationCommandInteraction) -> SlashCommandResult {
     let guild_id = command.guild_id.unwrap();
     let author_id = command.member.as_ref().unwrap().user.id;
     let channel_id = command
@@ -47,19 +50,17 @@ pub async fn leave(ctx: &Context, command: &ApplicationCommandInteraction) -> Co
         .clone();
     let has_handler = manager.get(guild_id).is_some();
     if has_handler {
-        if let Err(e) = manager.remove(guild_id).await {
-            channel_id
-                .say(&ctx.http, format!("Failed: {:?}", e))
-                .await?;
-        }
-        //channel_id.say(&ctx.http, "Left voice channel").await?;
+        manager
+            .remove(guild_id)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok("ばいばい".to_string())
     } else {
-        //channel_id.say(&ctx.http, "Not in a voice channel").await?;
+        Err("ボイスチャンネルに入ってないよ".to_string())
     }
-    Ok(())
 }
 
-pub async fn mute(ctx: &Context, command: &ApplicationCommandInteraction) -> CommandResult {
+pub async fn mute(ctx: &Context, command: &ApplicationCommandInteraction) -> SlashCommandResult {
     let guild_id = command.guild_id.unwrap();
     let author_id = command.member.as_ref().unwrap().user.id;
     let channel_id = command
@@ -76,30 +77,23 @@ pub async fn mute(ctx: &Context, command: &ApplicationCommandInteraction) -> Com
         .await
         .expect("Songbird Voice client placed in at initialisation.")
         .clone();
-    let handler_lock = match manager.get(guild_id) {
-        Some(handler) => handler,
-        None => {
-            channel_id.say(&ctx.http, "Not in a voice channel").await?;
-            return Ok(());
-        }
-    };
-
+    let handler_lock = manager
+        .get(guild_id)
+        .ok_or("ボイスチャンネルに入ってないよ")?;
     let mut handler = handler_lock.lock().await;
 
-    let content = if handler.is_mute() {
-        "Already muted".to_string()
+    if handler.is_mute() {
+        Err("もうミュートしてるよ".to_string())
     } else {
         if let Err(e) = handler.mute(true).await {
-            format!("Failed: {:?}", e)
+            Err(e.to_string())
         } else {
-            "Now muted".to_string()
+            Ok("ミュートしたよ".to_string())
         }
-    };
-    channel_id.say(&ctx.http, content).await?;
-    Ok(())
+    }
 }
 
-pub async fn unmute(ctx: &Context, command: &ApplicationCommandInteraction) -> CommandResult {
+pub async fn unmute(ctx: &Context, command: &ApplicationCommandInteraction) -> SlashCommandResult {
     let guild_id = command.guild_id.unwrap();
     let author_id = command.member.as_ref().unwrap().user.id;
     let channel_id = command
@@ -116,17 +110,13 @@ pub async fn unmute(ctx: &Context, command: &ApplicationCommandInteraction) -> C
         .await
         .expect("Songbird Voice client placed in at initialisation.")
         .clone();
-
-    let content = if let Some(handler_lock) = manager.get(guild_id) {
-        let mut handler = handler_lock.lock().await;
-        if let Err(e) = handler.mute(false).await {
-            format!("Failed: {:?}", e)
-        } else {
-            "Unmuted".to_string()
-        }
+    let handler_lock = manager
+        .get(guild_id)
+        .ok_or("ボイスチャンネルに入ってないよ")?;
+    let mut handler = handler_lock.lock().await;
+    if let Err(e) = handler.mute(false).await {
+        Err(e.to_string())
     } else {
-        "Not in a voice channel to unmute in".to_string()
-    };
-    channel_id.say(&ctx.http, content).await?;
-    Ok(())
+        Ok("ミュート解除したよ".to_string())
+    }
 }

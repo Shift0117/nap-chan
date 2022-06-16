@@ -5,6 +5,7 @@ use serenity::{
     client::Context, framework::standard::CommandResult,
     model::interactions::application_command::ApplicationCommandInteraction,
 };
+type SlashCommandResult = Result<String, String>;
 
 use crate::lib::text::{DictHandler, DICT_PATH};
 
@@ -13,7 +14,7 @@ pub async fn add(
     command: &ApplicationCommandInteraction,
     before: &str,
     after: &str,
-) -> CommandResult {
+) -> SlashCommandResult {
     dbg!(&before, &after);
     let dict_lock = {
         let data_read = ctx.data.read().await;
@@ -32,14 +33,14 @@ pub async fn add(
     dict_file.write_all(dict_json.as_bytes()).unwrap();
     dict_file.flush().unwrap();
 
-    Ok(())
+    Ok(format!("これからは{}って読むね",after))
 }
 
 pub async fn rem(
     ctx: &Context,
     command: &ApplicationCommandInteraction,
     word: &str,
-) -> CommandResult {
+) -> SlashCommandResult {
     let dict_lock = {
         let data_read = ctx.data.read().await;
         data_read.get::<DictHandler>().unwrap().clone()
@@ -58,5 +59,5 @@ pub async fn rem(
         .unwrap();
     dict_file.write_all(dict_json.as_bytes()).unwrap();
     dict_file.flush().unwrap();
-    Ok(())
+    Ok(format!("これからは{}って読むね",word))
 }

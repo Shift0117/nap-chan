@@ -99,15 +99,7 @@ impl EventHandler for Handler {
             "I now have the following guild slash commands: {:#?}",
             commands
         );
-        let guild_command = serenity::model::interactions::application_command::ApplicationCommand::
-        create_global_application_command(&ctx.http, |command| {
-            command.name("wonderful_command").description("An amazing command")
-        })
-        .await;
-        println!(
-            "I created the following global slash command: {:#?}",
-            guild_command
-        );
+
     }
     async fn voice_state_update(
         &self,
@@ -149,12 +141,10 @@ impl EventHandler for Handler {
             println!("Received command interaction: {:#?}", command);
             let content = match command.data.name.as_str() {
                 "join" => {
-                    meta::join(&ctx, &command).await.ok();
-                    "こんにちは".to_string()
+                    meta::join(&ctx, &command).await
                 }
                 "leave" => {
-                    meta::leave(&ctx, &command).await.ok();
-                    "さようなら".to_string()
+                    meta::leave(&ctx, &command).await
                 }
                 "add" => {
                     let options = &command.data.options;
@@ -179,8 +169,7 @@ impl EventHandler for Handler {
                         ),
                     ) = (before, after)
                     {
-                        dict::add(&ctx, &command, before, after).await.ok();
-                        format!("{}、覚えました", after).to_string()
+                        dict::add(&ctx, &command, before, after).await
                     } else {
                         unreachable!()
                     }
@@ -195,28 +184,28 @@ impl EventHandler for Handler {
                         .as_ref()
                         .expect("Expected string");
                     if let application_command::ApplicationCommandInteractionDataOptionValue::String(word) = word {
-                        dict::rem(&ctx,&command,word).await.ok();
-                    format!("これからは{}って読むね",word).to_string()
+                        dict::rem(&ctx,&command,word).await
                     }
                     else {
                         unreachable!()
                     }
                 }
                 "mute" => {
-                    meta::mute(&ctx, &command).await.ok();
-                    "ミュートしたよ".to_string()
+                    meta::mute(&ctx, &command).await
                 }
                 "unmute" => {
-                    meta::unmute(&ctx, &command).await.ok();
-                    "ミュート解除したよ".to_string()
+                    meta::unmute(&ctx, &command).await
                 }
-                _ => "未実装だよ！".to_string(),
+                _ => Err("未実装だよ！".to_string()),
             };
             if let Err(why) = command
                 .create_interaction_response(&ctx.http, |response| {
                     response
                         .kind(InteractionResponseType::ChannelMessageWithSource)
-                        .interaction_response_data(|message| message.content(content))
+                        .interaction_response_data(|message| message.content(match content {
+                            Ok(content) => content,
+                            Err(error) => format!("エラー: {}",error).to_string()
+                        }))
                 })
                 .await
             {
