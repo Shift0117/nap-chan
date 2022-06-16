@@ -13,11 +13,12 @@ pub async fn play_voice(ctx: &Context, msg: Message) {
     let mut temp_file = tempfile::Builder::new()
         .tempfile_in("temp").unwrap();
     let clean_option = ContentSafeOptions::new();
-    let cleaned = Text::new(content_safe(&ctx.cache, msg.content.clone(), &clean_option).await)
+    let cleaned = Text::new(format!("{} {}",msg.author.name,content_safe(&ctx.cache, msg.content.clone(), &clean_option).await))
         .make_read_text(&ctx)
         .await;
     dbg!(&cleaned);
-    create_voice(&cleaned, &mut temp_file).await;
+
+    create_voice(&cleaned.text, &mut temp_file).await;
     dbg!(&msg.content);
     dbg!(&cleaned);
     let guild = msg.guild(&ctx.cache).await.unwrap();
@@ -35,8 +36,8 @@ pub async fn play_voice(ctx: &Context, msg: Message) {
     }
 }
 
-async fn create_voice(text: &Text, temp_file: &mut NamedTempFile) {
-    let params = [("text", &text.text), ("speaker", &"1".to_string())];
+async fn create_voice(text: &str, temp_file: &mut NamedTempFile) {
+    let params = [("text", text), ("speaker", &"1".to_string())];
     let client = reqwest::Client::new();
     let voice_query_url = format!("{}/audio_query", BASE_URL);
     dbg!(&voice_query_url, &params);
