@@ -1,5 +1,15 @@
+use std::{sync::Arc, collections::HashMap};
+
 use regex;
-use serenity::client::Context;
+use serenity::{client::Context, prelude::TypeMapKey};
+use tokio::sync::Mutex;
+pub const DICT_PATH: &str = "read_dict.json";
+
+pub struct DictHandler;
+
+impl TypeMapKey for DictHandler {
+    type Value = Arc<Mutex<HashMap<String, String>>>;
+}
 
 #[derive(Debug, Clone)]
 pub struct Text {
@@ -21,7 +31,7 @@ impl Text {
         let mut text = self.text.clone();
         let dict_lock = {
             let data_read = ctx.data.read().await;
-            data_read.get::<crate::DictHandler>().unwrap().clone()
+            data_read.get::<DictHandler>().unwrap().clone()
         };
         let dict = dict_lock.lock().await;
         for (k, v) in dict.iter() {
@@ -30,6 +40,9 @@ impl Text {
         Self::new(text)
     }
     pub async fn make_read_text(&self, ctx: &Context) -> Self {
-        self.replace_url().remove_spoiler().replace_by_dict(ctx).await
+        self.replace_url()
+            .remove_spoiler()
+            .replace_by_dict(ctx)
+            .await
     }
 }
