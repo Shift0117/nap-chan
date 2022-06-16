@@ -5,7 +5,6 @@ use dotenv::dotenv;
 use lib::voice::*;
 use serenity::client::{ClientBuilder, Context};
 use serenity::http::Http;
-use serenity::model::channel::Channel;
 use serenity::model::id::GuildId;
 use serenity::model::interactions::{application_command, Interaction, InteractionResponseType};
 use serenity::model::prelude::VoiceState;

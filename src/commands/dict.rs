@@ -2,7 +2,7 @@ use std::{io::Write};
 
 use serde_json::to_string;
 use serenity::{
-    client::Context, framework::standard::CommandResult,
+    client::Context, 
     model::interactions::application_command::ApplicationCommandInteraction,
 };
 type SlashCommandResult = Result<String, String>;
@@ -11,7 +11,7 @@ use crate::lib::text::{DictHandler, DICT_PATH};
 
 pub async fn add(
     ctx: &Context,
-    command: &ApplicationCommandInteraction,
+    _command: &ApplicationCommandInteraction,
     before: &str,
     after: &str,
 ) -> SlashCommandResult {
@@ -38,7 +38,7 @@ pub async fn add(
 
 pub async fn rem(
     ctx: &Context,
-    command: &ApplicationCommandInteraction,
+    _command: &ApplicationCommandInteraction,
     word: &str,
 ) -> SlashCommandResult {
     let dict_lock = {

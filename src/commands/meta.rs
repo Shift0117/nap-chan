@@ -33,17 +33,6 @@ pub async fn join(ctx: &Context, command: &ApplicationCommandInteraction) -> Sla
 
 pub async fn leave(ctx: &Context, command: &ApplicationCommandInteraction) -> SlashCommandResult {
     let guild_id = command.guild_id.unwrap();
-    let author_id = command.member.as_ref().unwrap().user.id;
-    let channel_id = command
-        .guild_id
-        .unwrap()
-        .to_guild_cached(&ctx.cache)
-        .await
-        .unwrap()
-        .voice_states
-        .get(&author_id)
-        .and_then(|voice_state| voice_state.channel_id)
-        .unwrap();
     let manager = songbird::get(&ctx)
         .await
         .expect("Songbird Voice client placed in at initialisation.")
@@ -62,17 +51,6 @@ pub async fn leave(ctx: &Context, command: &ApplicationCommandInteraction) -> Sl
 
 pub async fn mute(ctx: &Context, command: &ApplicationCommandInteraction) -> SlashCommandResult {
     let guild_id = command.guild_id.unwrap();
-    let author_id = command.member.as_ref().unwrap().user.id;
-    let channel_id = command
-        .guild_id
-        .unwrap()
-        .to_guild_cached(&ctx.cache)
-        .await
-        .unwrap()
-        .voice_states
-        .get(&author_id)
-        .and_then(|voice_state| voice_state.channel_id)
-        .unwrap();
     let manager = songbird::get(&ctx)
         .await
         .expect("Songbird Voice client placed in at initialisation.")
@@ -95,17 +73,6 @@ pub async fn mute(ctx: &Context, command: &ApplicationCommandInteraction) -> Sla
 
 pub async fn unmute(ctx: &Context, command: &ApplicationCommandInteraction) -> SlashCommandResult {
     let guild_id = command.guild_id.unwrap();
-    let author_id = command.member.as_ref().unwrap().user.id;
-    let channel_id = command
-        .guild_id
-        .unwrap()
-        .to_guild_cached(&ctx.cache)
-        .await
-        .unwrap()
-        .voice_states
-        .get(&author_id)
-        .and_then(|voice_state| voice_state.channel_id)
-        .unwrap();
     let manager = songbird::get(&ctx)
         .await
         .expect("Songbird Voice client placed in at initialisation.")
