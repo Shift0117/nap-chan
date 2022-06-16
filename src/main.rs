@@ -100,7 +100,9 @@ impl EventHandler for Handler {
                 "ping" => "Hey, I'm alive!".to_string(),
                 "join" => {
                     let guild_id = command.guild_id.unwrap();
-                    let channel_id = command.channel_id;
+                    let author_id = command.member.as_ref().unwrap().user.id;
+                    let channel_id =command.guild_id.unwrap().to_guild_cached(&ctx.cache).await.unwrap().voice_states.get(&author_id)
+                    .and_then(|voice_state| voice_state.channel_id).unwrap();
                     let connect_to = channel_id;
                     let manager = songbird::get(&ctx)
                         .await
