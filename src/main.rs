@@ -28,12 +28,11 @@ use crate::commands::dict::DictHandler;
 use crate::lib::text::{DICT_PATH, GREETING_DICT_PATH};
 struct Handler;
 const GUILD_IDS_PATH: &str = "guilds.json";
+
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
         tracing::info!("{} is connected!", ready.user.name);
-        dotenv().ok();
-        dbg!(File::open(GUILD_IDS_PATH));
         let guilds_file = if let Ok(file) = File::open(GUILD_IDS_PATH) {
             file
         } else {
@@ -141,7 +140,11 @@ impl EventHandler for Handler {
         old: Option<VoiceState>,
         new: VoiceState,
     ) {
+        if old.as_ref().and_then(|old| Some(old.self_mute)) != Some(new.self_mute) || old.as_ref().and_then(|old| Some(old.self_deaf)) != Some(new.self_deaf)   {
+            return;
+        };
         let nako_id = &ctx.cache.current_user_id().await;
+        
         let channel_id = guild_id
             .unwrap()
             .to_guild_cached(&ctx.cache)
@@ -151,6 +154,21 @@ impl EventHandler for Handler {
             .get(&nako_id)
             .and_then(|voice_state| voice_state.channel_id)
             .unwrap();
+        let members_count = ctx
+            .cache
+            .channel(channel_id)
+            .await
+            .unwrap()
+            .guild()
+            .unwrap()
+            .members(&ctx.cache)
+            .await
+            .unwrap()
+            .iter()
+            .filter(|member| member.user.id.0 != nako_id.0 ).count();
+        if members_count == 0 {
+            meta::leave(&ctx, guild_id.unwrap()).await.ok();
+        }
         let user_id = new.user_id;
         if nako_id.0 == user_id.0 {
             return;
@@ -230,7 +248,7 @@ impl EventHandler for Handler {
             println!("Received command interaction: {:#?}", command);
             let content = match command.data.name.as_str() {
                 "join" => meta::join(&ctx, &command).await,
-                "leave" => meta::leave(&ctx, &command).await,
+                "leave" => meta::leave(&ctx, command.guild_id.unwrap()).await,
                 "add" => {
                     let options = &command.data.options;
                     let before = options
@@ -363,7 +381,7 @@ async fn main() {
     let application_id = std::env::var("APP_ID").unwrap().parse().unwrap();
     let token = std::env::var("VOICEVOX_TOKEN").expect("environment variable not found");
     dbg!(&token);
-    let dict_file = std::fs::File::open(DICT_PATH).unwrap_or({
+    let dict_file = if let Ok(file) =  std::fs::File::open(DICT_PATH) {file} else {
         let mut tmp = OpenOptions::new()
             .create(true)
             .write(true)
@@ -374,7 +392,7 @@ async fn main() {
         tmp.seek(std::io::SeekFrom::Start(0)).ok();
 
         tmp
-    });
+    };
     let greeting_dict_file = std::fs::File::open(GREETING_DICT_PATH).unwrap_or({
         let mut tmp = OpenOptions::new()
             .create(true)

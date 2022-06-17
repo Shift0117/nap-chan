@@ -39,7 +39,7 @@ pub async fn play_voice(ctx: &Context, msg: Message) {
 }
 
 async fn create_voice(text: &str, temp_file: &mut NamedTempFile) {
-    let params = [("text", text), ("speaker", &"1".to_string())];
+    let params = [("text", text), ("speaker", "1")];
     let client = reqwest::Client::new();
     let voice_query_url = format!("{}/audio_query", BASE_URL);
     let res = client
