@@ -4,7 +4,7 @@ use serenity::client::Context;
 
 use crate::commands::dict::DictHandler;
 pub const DICT_PATH: &str = "read_dict.json";
-pub const GREETING_DICT_PATH: &str = "greet_dict.json";
+pub const GREETING_DICT_PATH: &str = "greeting_dict.json";
 
 #[derive(Debug, Clone)]
 pub struct Text {

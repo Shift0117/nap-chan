@@ -23,7 +23,6 @@ pub async fn join(ctx: &Context, command: &ApplicationCommandInteraction) -> Sla
         .await
         .expect("Songbird Voice client placed in at initialisation.")
         .clone();
-
     let (handle_lock, _) = manager.join(guild_id, connect_to).await;
     let mut handle = handle_lock.lock().await;
     handle.deafen(true).await.unwrap();
