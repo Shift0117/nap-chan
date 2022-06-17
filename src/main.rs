@@ -144,6 +144,15 @@ impl EventHandler for Handler {
         tracing::info!("{:?}\n{:?}", old, new);
         tracing::info!("{} is connected!", new.member.as_ref().unwrap().user.name);
         let nako_id = &ctx.cache.current_user_id().await;
+        let nako_channel_id = guild_id
+            .unwrap()
+            .to_guild_cached(&ctx.cache)
+            .await
+            .unwrap()
+            .voice_states
+            .get(&nako_id)
+            .and_then(|voice_state| voice_state.channel_id)
+            .unwrap();
         let channel_id = guild_id
             .unwrap()
             .to_guild_cached(&ctx.cache)
@@ -187,7 +196,12 @@ impl EventHandler for Handler {
             {
                 return;
             }
-            1
+            if old.channel_id == Some(nako_channel_id) {
+                1
+            }
+            else {
+                0
+            }
         } else {
             0
         };
@@ -196,6 +210,7 @@ impl EventHandler for Handler {
             .await
             .get_greeting(&user_id, GREETING[greeting_index].0)
             .unwrap_or_else(|| GREETING[greeting_index].1.to_string());
+        tracing::info!("{:?}",dicts_lock.lock().await);
         let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
             .make_read_text(&ctx)
             .await;

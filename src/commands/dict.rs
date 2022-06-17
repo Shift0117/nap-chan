@@ -133,7 +133,9 @@ pub fn generate_dictonaries() -> Dicts {
 
         tmp
     };
-    let greeting_dict_file = std::fs::File::open(GREETING_DICT_PATH).unwrap_or({
+    let greeting_dict_file = if let Ok(file) = std::fs::File::open(GREETING_DICT_PATH) {
+        file
+    } else {
         let mut tmp = OpenOptions::new()
             .create(true)
             .write(true)
@@ -143,7 +145,7 @@ pub fn generate_dictonaries() -> Dicts {
         tmp.write_all("{}\n".as_bytes()).ok();
         tmp.seek(std::io::SeekFrom::Start(0)).ok();
         tmp
-    });
+    };
     let reader = std::io::BufReader::new(dict_file);
     let dict: HashMap<String, String> = serde_json::from_reader(reader).expect("JSON parse error");
 
