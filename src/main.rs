@@ -160,13 +160,11 @@ impl EventHandler for Handler {
             let members_count = ctx
                 .cache
                 .channel(channel_id)
-                .await
-                .unwrap()
-                .guild()
-                .unwrap()
+                .await?
+                .guild()?
                 .members(&ctx.cache)
                 .await
-                .unwrap()
+                .ok()?
                 .iter()
                 .filter(|member| member.user.id.0 != nako_id.0)
                 .count();
@@ -377,7 +375,7 @@ async fn main() {
         .init();
     dotenv().ok();
     let application_id = std::env::var("APP_ID").unwrap().parse().unwrap();
-    let token = std::env::var("VOICEVOX_TOKEN").expect("environment variable not found");
+    let token = std::env::var("DISCORD_TOKEN").expect("environment variable not found");
     dbg!(&token);
     let framework = StandardFramework::new()
         .configure(|c| c.prefix(">"))
