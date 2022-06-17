@@ -24,10 +24,12 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::commands::dict::DictHandler;
+use crate::commands::dict::{generate_dictonaries, DictHandler};
 use crate::lib::text::{DICT_PATH, GREETING_DICT_PATH};
 struct Handler;
 const GUILD_IDS_PATH: &str = "guilds.json";
+
+const GREETING: [(&str, &str); 2] = [("hello", "こんにちは"), ("bye", "ばいばい")];
 
 #[async_trait]
 impl EventHandler for Handler {
@@ -140,18 +142,19 @@ impl EventHandler for Handler {
         old: Option<VoiceState>,
         new: VoiceState,
     ) {
-        if old.as_ref().and_then(|old| Some(old.self_mute)) != Some(new.self_mute) || old.as_ref().and_then(|old| Some(old.self_deaf)) != Some(new.self_deaf)   {
+        if old.as_ref().and_then(|old| Some(old.self_mute)) != Some(new.self_mute)
+            || old.as_ref().and_then(|old| Some(old.self_deaf)) != Some(new.self_deaf)
+        {
             return;
         };
         let nako_id = &ctx.cache.current_user_id().await;
-        
         let channel_id = guild_id
             .unwrap()
             .to_guild_cached(&ctx.cache)
             .await
             .unwrap()
             .voice_states
-            .get(&nako_id)
+            .get(nako_id)
             .and_then(|voice_state| voice_state.channel_id)
             .unwrap();
         let members_count = ctx
@@ -165,7 +168,8 @@ impl EventHandler for Handler {
             .await
             .unwrap()
             .iter()
-            .filter(|member| member.user.id.0 != nako_id.0 ).count();
+            .filter(|member| member.user.id.0 != nako_id.0)
+            .count();
         if members_count == 0 {
             meta::leave(&ctx, guild_id.unwrap()).await.ok();
         }
@@ -178,41 +182,21 @@ impl EventHandler for Handler {
             let data_read = ctx.data.read().await;
             data_read.get::<DictHandler>().unwrap().clone()
         };
-        let dicts = dicts_lock.lock().await;
-
-        if new.channel_id != Some(channel_id) {
-            // disconnect
-            let new = HashMap::new();
-            let bye = "ばいばい".to_string();
-            let greet_text = dicts
-                .greeting_dict
-                .get(&user_id)
-                .unwrap_or(&new)
-                .get("bye")
-                .unwrap_or(&bye)
-                .clone();
-            drop(dicts);
-            let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
-                .make_read_text(&ctx)
-                .await;
-            play_raw_voice(&ctx, &text.text, guild_id.unwrap()).await;
+        let greeting_index = if new.channel_id != Some(channel_id) {
+            1
         } else {
-            // connect
-            let new = HashMap::new();
-            let hello = "こんにちは".to_string();
-            let greet_text = dicts
-                .greeting_dict
-                .get(&user_id)
-                .unwrap_or(&new)
-                .get("hello")
-                .unwrap_or(&hello)
-                .clone();
-            drop(dicts);
-            let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
-                .make_read_text(&ctx)
-                .await;
-            play_raw_voice(&ctx, &text.text, guild_id.unwrap()).await;
-        }
+            0
+        };
+        let greet_text = {
+            let dicts = dicts_lock.lock().await;
+            dicts
+                .get_greeting(&user_id, GREETING[greeting_index].0)
+                .unwrap_or_else(|| GREETING[greeting_index].1.to_string())
+        };
+        let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
+            .make_read_text(&ctx)
+            .await;
+        play_raw_voice(&ctx, &text.text, guild_id.unwrap()).await;
 
         tracing::info!("{:?}\n{:?}", old, new);
         tracing::info!("{} is connected!", new.member.unwrap().user.name);
@@ -381,39 +365,6 @@ async fn main() {
     let application_id = std::env::var("APP_ID").unwrap().parse().unwrap();
     let token = std::env::var("VOICEVOX_TOKEN").expect("environment variable not found");
     dbg!(&token);
-    let dict_file = if let Ok(file) =  std::fs::File::open(DICT_PATH) {file} else {
-        let mut tmp = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .read(true)
-            .open(DICT_PATH)
-            .expect("File creation error");
-        tmp.write_all("{}".as_bytes()).ok();
-        tmp.seek(std::io::SeekFrom::Start(0)).ok();
-
-        tmp
-    };
-    let greeting_dict_file = std::fs::File::open(GREETING_DICT_PATH).unwrap_or({
-        let mut tmp = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .read(true)
-            .open(GREETING_DICT_PATH)
-            .expect("File creation error");
-        tmp.write_all("{}\n".as_bytes()).ok();
-        tmp.seek(std::io::SeekFrom::Start(0)).ok();
-        tmp
-    });
-    let reader = std::io::BufReader::new(dict_file);
-    let dict: HashMap<String, String> = serde_json::from_reader(reader).expect("JSON parse error");
-
-    let greeting_reader = std::io::BufReader::new(greeting_dict_file);
-    let greeting_dict: HashMap<UserId, HashMap<String, String>> =
-        serde_json::from_reader(greeting_reader).unwrap();
-    let dicts = dict::Dicts {
-        dict,
-        greeting_dict,
-    };
     let framework = StandardFramework::new()
         .configure(|c| c.prefix(">"))
         .group(&GENERAL_GROUP);
@@ -426,7 +377,7 @@ async fn main() {
             .expect("Err creating client");
     {
         let mut data = client.data.write().await;
-        data.insert::<DictHandler>(Arc::new(Mutex::new(dicts)));
+        data.insert::<DictHandler>(Arc::new(Mutex::new(generate_dictonaries())));
     }
     tokio::spawn(async move {
         let _ = client
