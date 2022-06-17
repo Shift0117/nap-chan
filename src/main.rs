@@ -141,11 +141,8 @@ impl EventHandler for Handler {
         old: Option<VoiceState>,
         new: VoiceState,
     ) {
-        if old.as_ref().and_then(|old| Some(old.self_mute)) != Some(new.self_mute)
-            || old.as_ref().and_then(|old| Some(old.self_deaf)) != Some(new.self_deaf)
-        {
-            return;
-        };
+        tracing::info!("{:?}\n{:?}", old, new);
+        tracing::info!("{} is connected!", new.member.as_ref().unwrap().user.name);
         let nako_id = &ctx.cache.current_user_id().await;
         let channel_id = guild_id
             .unwrap()
@@ -171,6 +168,7 @@ impl EventHandler for Handler {
             .count();
         if members_count == 0 {
             meta::leave(&ctx, guild_id.unwrap()).await.ok();
+            return;
         }
         let user_id = new.user_id;
         if nako_id.0 == user_id.0 {
@@ -181,7 +179,14 @@ impl EventHandler for Handler {
             let data_read = ctx.data.read().await;
             data_read.get::<DictHandler>().unwrap().clone()
         };
-        let greeting_index = if new.channel_id != Some(channel_id) {
+        let greeting_index = if let Some(ref old) = old {
+            if old.self_mute != new.self_mute
+                || old.self_deaf != new.self_deaf
+                || old.self_video != new.self_video
+                || old.self_stream != new.self_stream
+            {
+                return;
+            }
             1
         } else {
             0
