@@ -165,7 +165,7 @@ impl EventHandler for Handler {
             .iter()
             .filter(|member| member.user.id.0 != nako_id.0 ).count();
         if members_count == 0 {
-            meta::leave(&ctx, guild_id.unwrap());
+            meta::leave(&ctx, guild_id.unwrap()).await;
         }
         let user_id = new.user_id;
         if nako_id.0 == user_id.0 {
