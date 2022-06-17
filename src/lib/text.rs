@@ -16,11 +16,11 @@ impl Text {
     }
     fn replace_url(&self) -> Self {
         let re = regex::Regex::new(r"https?://[\w!?/+\-_~;.,*&@#$%()='\[\]]+").unwrap();
-        Self::new(re.replace(&self.text, "URL").to_string())
+        Self::new(re.replace_all(&self.text, "URL").to_string())
     }
     fn remove_spoiler(&self) -> Self {
         let re = regex::Regex::new(r"\|\|.+?\|\|").unwrap();
-        Self::new(re.replace(&self.text, "").to_string())
+        Self::new(re.replace_all(&self.text, "").to_string())
     }
     async fn replace_by_dict(&self, ctx: &Context) -> Self {
         let mut text = self.text.clone();
@@ -34,9 +34,14 @@ impl Text {
         }
         Self::new(text)
     }
+    fn remove_custom_emoji(&self) -> Self {
+        let re = regex::Regex::new(r"<@.+?>").unwrap();
+        Self::new(re.replace_all(&self.text, "").to_string())
+    }
     pub async fn make_read_text(&self, ctx: &Context) -> Self {
         self.replace_url()
             .remove_spoiler()
+            .remove_custom_emoji()
             .replace_by_dict(ctx)
             .await
     }
