@@ -1,6 +1,5 @@
 use serenity::{
-    client::Context, 
-    model::interactions::application_command::ApplicationCommandInteraction,
+    client::Context, model::interactions::application_command::ApplicationCommandInteraction,
 };
 use songbird::{Event, TrackEvent};
 type SlashCommandResult = Result<String, String>;
@@ -39,10 +38,7 @@ pub async fn leave(ctx: &Context, command: &ApplicationCommandInteraction) -> Sl
         .clone();
     let has_handler = manager.get(guild_id).is_some();
     if has_handler {
-        manager
-            .remove(guild_id)
-            .await
-            .map_err(|e| e.to_string())?;
+        manager.remove(guild_id).await.map_err(|e| e.to_string())?;
         Ok("ばいばい".to_string())
     } else {
         Err("ボイスチャンネルに入ってないよ".to_string())
