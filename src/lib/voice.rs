@@ -8,14 +8,17 @@ use serenity::{
     utils::{content_safe, ContentSafeOptions},
 };
 use tempfile::{self, NamedTempFile};
-const BASE_URL: &str = "http://127.0.0.1:50031";
+
 pub async fn play_voice(ctx: &Context, msg: Message) {
     let mut temp_file = tempfile::Builder::new().tempfile_in("temp").unwrap();
     let clean_option = ContentSafeOptions::new();
     let text = Text::new(format!(
         "{} {}",
         if msg.author.id != ctx.cache.as_ref().current_user_id().await {
-            &msg.author.name
+            match &msg.member.as_ref().expect("member not found?").nick {
+                Some(nick) => nick,
+                None => &msg.author.name,
+            }
         } else {
             ""
         },
@@ -39,9 +42,11 @@ pub async fn play_voice(ctx: &Context, msg: Message) {
 }
 
 async fn create_voice(text: &str, temp_file: &mut NamedTempFile) {
-    let params = [("text", text), ("speaker", "1")];
+    dotenv::dotenv().ok();
+    let base_url = std::env::var("BASE_URL").expect("environment variable not found");
+    let params = [("text", text), ("speaker", "5")];
     let client = reqwest::Client::new();
-    let voice_query_url = format!("{}/audio_query", BASE_URL);
+    let voice_query_url = format!("{}/audio_query", base_url);
     let res = client
         .post(voice_query_url)
         .query(&params)
@@ -50,8 +55,8 @@ async fn create_voice(text: &str, temp_file: &mut NamedTempFile) {
         .expect("Panic in audio query");
     println!("{}", res.status());
     let synthesis_body = res.text().await.expect("Panic in get body");
-    let synthesis_arg = [("speaker", 1i16)];
-    let synthesis_url = format!("{}/synthesis", BASE_URL);
+    let synthesis_arg = [("speaker", 5i16)];
+    let synthesis_url = format!("{}/synthesis", base_url);
     let synthesis_res = client
         .post(synthesis_url)
         .body(synthesis_body)

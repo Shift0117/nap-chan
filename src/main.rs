@@ -219,31 +219,30 @@ impl EventHandler for Handler {
         tracing::info!("{:?}\n{:?}", old, new);
         tracing::info!("{} is connected!", new.member.unwrap().user.name);
     }
-    async fn message(&self, ctx: Context, msg: Message) {
+     async fn message(&self, ctx: Context, msg: Message) {
         let guild = msg.guild(&ctx.cache).await.unwrap();
-        let channel_id = guild
-            .voice_states
-            .get(&msg.author.id)
-            .unwrap()
-            .channel_id
-            .unwrap();
-        let members = ctx
-            .cache
-            .channel(channel_id)
-            .await
-            .unwrap()
-            .guild()
-            .unwrap()
-            .members(&ctx.cache)
-            .await
-            .unwrap()
-            .iter()
-            .map(|member| member.user.id)
-            .collect::<Vec<_>>();
-        if members.contains(&ctx.cache.current_user_id().await) {
-            dbg!(&msg);
-            play_voice(&ctx, msg).await;
-        };
+        let author_voice_states = guild.voice_states.get(&msg.author.id);
+        if let Some(states) = author_voice_states {
+            let channel_id = states.channel_id.unwrap();
+            let members = ctx
+                .cache
+                .channel(channel_id)
+                .await
+                .unwrap()
+                .guild()
+                .unwrap()
+                .members(&ctx.cache)
+                .await
+                .unwrap()
+                .iter()
+                .map(|member| member.user.id)
+                .collect::<Vec<_>>();
+            if members.contains(&ctx.cache.current_user_id().await) {
+                dbg!(&msg);
+                play_voice(&ctx, msg).await;
+            };
+        } else {
+        }
     }
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(command) = interaction {
@@ -381,7 +380,7 @@ async fn main() {
         .init();
     dotenv().ok();
     let application_id = std::env::var("APP_ID").unwrap().parse().unwrap();
-    let token = std::env::var("VOICEVOX_TOKEN").expect("environment variable not found");
+    let token = std::env::var("DISCORD_TOKEN").expect("environment variable not found");
     dbg!(&token);
     let framework = StandardFramework::new()
         .configure(|c| c.prefix(">"))
