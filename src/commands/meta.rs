@@ -1,5 +1,5 @@
 use serenity::{
-    client::Context, model::interactions::application_command::ApplicationCommandInteraction,
+    client::Context, model::{interactions::application_command::ApplicationCommandInteraction, id::GuildId},
 };
 use songbird::{Event, TrackEvent};
 type SlashCommandResult = Result<String, String>;
@@ -30,8 +30,8 @@ pub async fn join(ctx: &Context, command: &ApplicationCommandInteraction) -> Sla
     Ok("おはよ！".to_string())
 }
 
-pub async fn leave(ctx: &Context, command: &ApplicationCommandInteraction) -> SlashCommandResult {
-    let guild_id = command.guild_id.unwrap();
+pub async fn leave(ctx: &Context, guild_id: GuildId) -> SlashCommandResult {
+    //let guild_id = command.guild_id.unwrap();
     let manager = songbird::get(&ctx)
         .await
         .expect("Songbird Voice client placed in at initialisation.")

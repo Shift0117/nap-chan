@@ -142,6 +142,7 @@ impl EventHandler for Handler {
         new: VoiceState,
     ) {
         let nako_id = &ctx.cache.current_user_id().await;
+        
         let channel_id = guild_id
             .unwrap()
             .to_guild_cached(&ctx.cache)
@@ -151,6 +152,21 @@ impl EventHandler for Handler {
             .get(&nako_id)
             .and_then(|voice_state| voice_state.channel_id)
             .unwrap();
+        let members_count = ctx
+            .cache
+            .channel(channel_id)
+            .await
+            .unwrap()
+            .guild()
+            .unwrap()
+            .members(&ctx.cache)
+            .await
+            .unwrap()
+            .iter()
+            .filter(|member| member.user.id.0 != nako_id.0 ).count();
+        if members_count == 0 {
+            meta::leave(&ctx, guild_id.unwrap());
+        }
         let user_id = new.user_id;
         if nako_id.0 == user_id.0 {
             return;
@@ -230,7 +246,7 @@ impl EventHandler for Handler {
             println!("Received command interaction: {:#?}", command);
             let content = match command.data.name.as_str() {
                 "join" => meta::join(&ctx, &command).await,
-                "leave" => meta::leave(&ctx, &command).await,
+                "leave" => meta::leave(&ctx, command.guild_id.unwrap()).await,
                 "add" => {
                     let options = &command.data.options;
                     let before = options
