@@ -7,7 +7,7 @@ use serenity::client::{ClientBuilder, Context};
 use serenity::framework::standard::macros::{command, group};
 use serenity::framework::standard::CommandResult;
 use serenity::http::Http;
-use serenity::model::id::{GuildId, UserId};
+use serenity::model::id::GuildId;
 use serenity::model::interactions::{application_command, Interaction, InteractionResponseType};
 use serenity::model::prelude::VoiceState;
 use serenity::{
@@ -17,7 +17,7 @@ use serenity::{
     model::{channel::Message, gateway::Ready},
 };
 use songbird::{Event, EventContext, SerenityInit};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Seek, Write};
 use std::path::Path;
@@ -25,7 +25,6 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::commands::dict::{generate_dictonaries, DictHandler};
-use crate::lib::text::{DICT_PATH, GREETING_DICT_PATH};
 struct Handler;
 const GUILD_IDS_PATH: &str = "guilds.json";
 
