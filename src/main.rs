@@ -186,12 +186,11 @@ impl EventHandler for Handler {
         } else {
             0
         };
-        let greet_text = {
-            let dicts = dicts_lock.lock().await;
-            dicts
-                .get_greeting(&user_id, GREETING[greeting_index].0)
-                .unwrap_or_else(|| GREETING[greeting_index].1.to_string())
-        };
+        let greet_text = dicts_lock
+            .lock()
+            .await
+            .get_greeting(&user_id, GREETING[greeting_index].0)
+            .unwrap_or_else(|| GREETING[greeting_index].1.to_string());
         let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
             .make_read_text(&ctx)
             .await;
