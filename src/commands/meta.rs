@@ -1,10 +1,11 @@
 use serenity::{
-    client::Context, model::{interactions::application_command::ApplicationCommandInteraction, id::GuildId},
+    client::Context,
+    model::{id::GuildId, interactions::application_command::ApplicationCommandInteraction},
 };
 use songbird::{Event, TrackEvent};
 type SlashCommandResult = Result<String, String>;
 
-use crate::TrackEndNotifier;
+use crate::{lib::voice::play_raw_voice, TrackEndNotifier};
 pub async fn join(ctx: &Context, command: &ApplicationCommandInteraction) -> SlashCommandResult {
     let guild_id = command.guild_id.unwrap();
     let author_id = command.member.as_ref().unwrap().user.id;
@@ -27,6 +28,7 @@ pub async fn join(ctx: &Context, command: &ApplicationCommandInteraction) -> Sla
     let mut handle = handle_lock.lock().await;
     handle.deafen(true).await.unwrap();
     handle.add_global_event(Event::Track(TrackEvent::End), TrackEndNotifier);
+    //play_raw_voice(ctx, "おはよ！", 1, guild_id).await;
     Ok("おはよ！".to_string())
 }
 
