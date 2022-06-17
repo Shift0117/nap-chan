@@ -1,8 +1,14 @@
-use std::{collections::HashMap, io::Write, sync::Arc};
+use std::{
+    collections::HashMap,
+    fs::OpenOptions,
+    io::{Seek, Write},
+    sync::Arc,
+};
 
 use serde_json::to_string;
 use serenity::{
-    client::Context, model::{interactions::application_command::ApplicationCommandInteraction, id::UserId},
+    client::Context,
+    model::{id::UserId, interactions::application_command::ApplicationCommandInteraction},
     prelude::TypeMapKey,
 };
 use tokio::sync::Mutex;
@@ -13,6 +19,12 @@ pub struct DictHandler;
 pub struct Dicts {
     pub dict: HashMap<String, String>,
     pub greeting_dict: HashMap<UserId, HashMap<String, String>>,
+}
+
+impl Dicts {
+    pub fn get_greeting(&self, user_id: &UserId, kinds: &str) -> Option<String> {
+        Some(self.greeting_dict.get(user_id)?.get(kinds)?.clone())
+    }
 }
 
 impl TypeMapKey for DictHandler {
@@ -104,4 +116,44 @@ pub async fn hello(
         command.member.as_ref().unwrap().user.name,
         greet
     ))
+}
+
+pub fn generate_dictonaries() -> Dicts {
+    let dict_file = if let Ok(file) = std::fs::File::open(DICT_PATH) {
+        file
+    } else {
+        let mut tmp = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .read(true)
+            .open(DICT_PATH)
+            .expect("File creation error");
+        tmp.write_all("{}".as_bytes()).ok();
+        tmp.seek(std::io::SeekFrom::Start(0)).ok();
+
+        tmp
+    };
+    let greeting_dict_file = if let Ok(file) = std::fs::File::open(GREETING_DICT_PATH) {
+        file
+    } else {
+        let mut tmp = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .read(true)
+            .open(GREETING_DICT_PATH)
+            .expect("File creation error");
+        tmp.write_all("{}\n".as_bytes()).ok();
+        tmp.seek(std::io::SeekFrom::Start(0)).ok();
+        tmp
+    };
+    let reader = std::io::BufReader::new(dict_file);
+    let dict: HashMap<String, String> = serde_json::from_reader(reader).expect("JSON parse error");
+
+    let greeting_reader = std::io::BufReader::new(greeting_dict_file);
+    let greeting_dict: HashMap<UserId, HashMap<String, String>> =
+        serde_json::from_reader(greeting_reader).unwrap();
+    Dicts {
+        dict,
+        greeting_dict,
+    }
 }
