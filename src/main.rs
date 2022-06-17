@@ -140,11 +140,9 @@ impl EventHandler for Handler {
         old: Option<VoiceState>,
         new: VoiceState,
     ) {
-        if old.as_ref().and_then(|old| Some(old.self_mute)) != Some(new.self_mute) || old.as_ref().and_then(|old| Some(old.self_deaf)) != Some(new.self_deaf)   {
-            return;
-        };
+        tracing::info!("{:?}\n{:?}", old, new);
+        tracing::info!("{} is connected!", new.member.as_ref().unwrap().user.name);
         let nako_id = &ctx.cache.current_user_id().await;
-        
         let channel_id = guild_id
             .unwrap()
             .to_guild_cached(&ctx.cache)
@@ -165,9 +163,11 @@ impl EventHandler for Handler {
             .await
             .unwrap()
             .iter()
-            .filter(|member| member.user.id.0 != nako_id.0 ).count();
+            .filter(|member| member.user.id.0 != nako_id.0)
+            .count();
         if members_count == 0 {
             meta::leave(&ctx, guild_id.unwrap()).await.ok();
+            return;
         }
         let user_id = new.user_id;
         if nako_id.0 == user_id.0 {
@@ -179,9 +179,10 @@ impl EventHandler for Handler {
             data_read.get::<DictHandler>().unwrap().clone()
         };
         let dicts = dicts_lock.lock().await;
-
-        if new.channel_id != Some(channel_id) {
-            // disconnect
+        if let Some(old) = old {
+            if old.self_mute != new.self_mute || old.self_deaf != new.self_deaf || old.self_video != new.self_video || old.self_stream != new.self_stream{
+                return;
+            };
             let new = HashMap::new();
             let bye = "ばいばい".to_string();
             let greet_text = dicts
@@ -197,7 +198,6 @@ impl EventHandler for Handler {
                 .await;
             play_raw_voice(&ctx, &text.text, guild_id.unwrap()).await;
         } else {
-            // connect
             let new = HashMap::new();
             let hello = "こんにちは".to_string();
             let greet_text = dicts
@@ -213,9 +213,6 @@ impl EventHandler for Handler {
                 .await;
             play_raw_voice(&ctx, &text.text, guild_id.unwrap()).await;
         }
-
-        tracing::info!("{:?}\n{:?}", old, new);
-        tracing::info!("{} is connected!", new.member.unwrap().user.name);
     }
     async fn message(&self, ctx: Context, msg: Message) {
         let guild = msg.guild(&ctx.cache).await.unwrap();
@@ -381,7 +378,9 @@ async fn main() {
     let application_id = std::env::var("APP_ID").unwrap().parse().unwrap();
     let token = std::env::var("VOICEVOX_TOKEN").expect("environment variable not found");
     dbg!(&token);
-    let dict_file = if let Ok(file) =  std::fs::File::open(DICT_PATH) {file} else {
+    let dict_file = if let Ok(file) = std::fs::File::open(DICT_PATH) {
+        file
+    } else {
         let mut tmp = OpenOptions::new()
             .create(true)
             .write(true)
