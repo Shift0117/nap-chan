@@ -6,9 +6,12 @@ use songbird::{Event, TrackEvent};
 type SlashCommandResult = Result<String, String>;
 
 use crate::{lib::voice::play_raw_voice, TrackEndNotifier};
+
+use super::dict::DictHandler;
 pub async fn join(ctx: &Context, command: &ApplicationCommandInteraction) -> SlashCommandResult {
     let guild_id = command.guild_id.unwrap();
     let author_id = command.member.as_ref().unwrap().user.id;
+    let text_channel_id = command.channel_id;
     let channel_id = command
         .guild_id
         .unwrap()
@@ -28,7 +31,7 @@ pub async fn join(ctx: &Context, command: &ApplicationCommandInteraction) -> Sla
     let mut handle = handle_lock.lock().await;
     handle.deafen(true).await.unwrap();
     handle.add_global_event(Event::Track(TrackEvent::End), TrackEndNotifier);
-    //play_raw_voice(ctx, "おはよ！", 1, guild_id).await;
+    ctx.data.read().await.get::<DictHandler>().unwrap().lock().await.read_channel = Some(text_channel_id);
     Ok("おはよ！".to_string())
 }
 

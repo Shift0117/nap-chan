@@ -239,7 +239,12 @@ impl EventHandler for Handler {
             let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
                 .make_read_text(&ctx)
                 .await;
-            let voice_type = *dicts_lock.lock().await.voice_type_dict.get(&user_id).unwrap_or(&1);
+            let voice_type = *dicts_lock
+                .lock()
+                .await
+                .voice_type_dict
+                .get(&user_id)
+                .unwrap_or(&1);
             play_raw_voice(&ctx, &text.text, voice_type, guild_id?).await;
             Some(())
         }
@@ -248,26 +253,12 @@ impl EventHandler for Handler {
     async fn message(&self, ctx: Context, msg: Message) {
         let guild = msg.guild(&ctx.cache).await.unwrap();
         let nako_id = ctx.cache.current_user_id().await;
-        let channel_id = guild
+        let voice_channel_id = guild
             .voice_states
             .get(&msg.author.id)
-            .unwrap()
-            .channel_id
-            .unwrap();
-        let members = ctx
-            .cache
-            .channel(channel_id)
-            .await
-            .unwrap()
-            .guild()
-            .unwrap()
-            .members(&ctx.cache)
-            .await
-            .unwrap()
-            .iter()
-            .map(|member| member.user.id)
-            .collect::<Vec<_>>();
-        let voice_type = *ctx
+            .and_then(|voice_states| voice_states.channel_id);
+        let text_channel_id = msg.channel_id;
+        let read_channel_id = ctx
             .data
             .read()
             .await
@@ -275,14 +266,39 @@ impl EventHandler for Handler {
             .unwrap()
             .lock()
             .await
-            .voice_type_dict
-            .get(&msg.author.id)
-            .unwrap_or(&1);
-
-        if members.contains(&nako_id) && msg.author.id != nako_id {
-            dbg!(&msg);
-            play_voice(&ctx, msg, voice_type).await;
-        };
+            .read_channel;
+        if read_channel_id == Some(text_channel_id) {
+            if let Some(voice_channel_id) = voice_channel_id {
+                let members = ctx
+                    .cache
+                    .channel(voice_channel_id)
+                    .await
+                    .unwrap()
+                    .guild()
+                    .unwrap()
+                    .members(&ctx.cache)
+                    .await
+                    .unwrap()
+                    .iter()
+                    .map(|member| member.user.id)
+                    .collect::<Vec<_>>();
+                let voice_type = *ctx
+                    .data
+                    .read()
+                    .await
+                    .get::<DictHandler>()
+                    .unwrap()
+                    .lock()
+                    .await
+                    .voice_type_dict
+                    .get(&msg.author.id)
+                    .unwrap_or(&1);
+                if members.contains(&nako_id) && msg.author.id != nako_id {
+                    dbg!(&msg);
+                    play_voice(&ctx, msg, voice_type).await;
+                };
+            }
+        }
     }
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(command) = interaction {
