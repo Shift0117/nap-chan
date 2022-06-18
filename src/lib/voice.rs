@@ -96,7 +96,7 @@ pub async fn create_sample_voices() {
             .write(true)
             .read(true)
             .create_new(true)
-            .open(format!("sample_voice/sample_{}", i))
+            .open(format!("sample_voice/sample_{}.wav", i))
         {
             create_voice(&format!("タイプ{}わこんな感じだよ", i), i, &mut file).await;
         }

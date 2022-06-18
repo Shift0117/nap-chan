@@ -183,5 +183,14 @@ pub async fn set_voice_type(
     let voice_type_dict = &mut dict_lock.lock().await.voice_type_dict;
     let author_id = command.member.as_ref().unwrap().user.id;
     voice_type_dict.insert(author_id, voice_type);
+    let voice_type_dict_json = to_string(&voice_type_dict).unwrap();
+    let mut dict_file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .truncate(true)
+        .open(VOICE_TYPE_DICT_PATH)
+        .unwrap();
+    dict_file.write_all(voice_type_dict_json.as_bytes()).unwrap();
+    dict_file.flush().unwrap();
     Ok(format!("ボイスタイプを{}に変えたよ",voice_type).to_string())
 }

@@ -135,7 +135,7 @@ impl EventHandler for Handler {
                     })
                     .create_application_command(|command| {
                         command
-                            .name("voice_test")
+                            .name("play_sample_voice")
                             .description("入力されたタイプのサンプルボイスを再生します")
                             .create_option(|option| {
                                 option
@@ -350,7 +350,7 @@ impl EventHandler for Handler {
                         unreachable!()
                     }
                 }
-                "voice_test" => {
+                "play_sample_voice" => {
                     let voice_type = &command
                         .data
                         .options
@@ -367,7 +367,7 @@ impl EventHandler for Handler {
                      = voice_type
                     {
 
-                        commands::voice::play_test_voice(
+                        commands::voice::play_sample_voice(
                             &ctx,
                             command.guild_id.unwrap(),
                             *voice_type as u8,
@@ -426,7 +426,8 @@ impl songbird::EventHandler for TrackEndNotifier {
         if let EventContext::Track(track_list) = ctx {
             for (_, handle) in track_list.iter() {
                 let path = handle.metadata().source_url.as_ref().unwrap();
-                if path.starts_with("temp") {
+                tracing::info!("played file path: {:?}", path);
+                if !path.ends_with(".wav") {
                     std::fs::remove_file(Path::new(handle.metadata().source_url.as_ref().unwrap()))
                         .unwrap();
                 }
@@ -485,6 +486,8 @@ async fn main() {
         let mut data = client.data.write().await;
         data.insert::<DictHandler>(Arc::new(Mutex::new(generate_dictonaries())));
     }
+    std::fs::create_dir("temp").ok();
+
     tokio::spawn(async move {
         let _ = client
             .start()
