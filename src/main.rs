@@ -51,6 +51,9 @@ impl EventHandler for Handler {
         let guild_ids: HashSet<GuildId> =
             serde_json::from_reader(reader).expect("JSON parse error");
         tracing::info!("{:?}", &guild_ids);
+
+        create_sample_voices().await;
+        
         /*let old_global_commands = ctx.http.get_global_application_commands().await.unwrap();
         for command in old_global_commands {
             dbg!(command.name);
@@ -130,6 +133,22 @@ impl EventHandler for Handler {
                                     .description("string")
                             })
                     })
+                    .create_application_command(|command| {
+                        command
+                            .name("voice_test")
+                            .description("ボイスのテストをします")
+                            .create_option(|option| {
+                                option
+                                    .kind(
+                                        application_command::ApplicationCommandOptionType::Integer,
+                                    )
+                                    .max_int_value(5)
+                                    .min_int_value(0)
+                                    .required(true)
+                                    .name("type")
+                                    .description("voice type")
+                            })
+                    })
             })
             .await;
         }
@@ -141,28 +160,84 @@ impl EventHandler for Handler {
         old: Option<VoiceState>,
         new: VoiceState,
     ) {
-        tracing::info!("{:?}\n{:?}", old, new);
-        tracing::info!("{} is connected!", new.member.as_ref().unwrap().user.name);
         let nako_id = &ctx.cache.current_user_id().await;
-        let nako_channel_id = guild_id
-            .unwrap()
-            .to_guild_cached(&ctx.cache)
-            .await
-            .unwrap()
+        let _ = async move {
+            let nako_channel_id = guild_id?
+                .to_guild_cached(&ctx.cache)
+                .await?
+                .voice_states
+                .get(&nako_id)?
+                .channel_id?;
+            let channel_id = guild_id?
+                .to_guild_cached(&ctx.cache)
+                .await?
+                .voice_states
+                .get(nako_id)?
+                .channel_id?;
+            let members_count = ctx
+                .cache
+                .channel(channel_id)
+                .await?
+                .guild()?
+                .members(&ctx.cache)
+                .await
+                .ok()?
+                .iter()
+                .filter(|member| member.user.id.0 != nako_id.0)
+                .count();
+            if members_count == 0 {
+                meta::leave(&ctx, guild_id?).await.ok();
+                return Some(());
+            }
+            let user_id = new.user_id;
+            if nako_id.0 == user_id.0 {
+                return Some(());
+            }
+            let user_name = &new.member.as_ref()?.user.name;
+            let dicts_lock = {
+                let data_read = ctx.data.read().await;
+                data_read.get::<DictHandler>()?.clone()
+            };
+            let greeting_index = if let Some(ref old) = old {
+                if old.self_mute != new.self_mute
+                    || old.self_deaf != new.self_deaf
+                    || old.self_video != new.self_video
+                    || old.self_stream != new.self_stream
+                {
+                    return Some(());
+                }
+                if old.channel_id == Some(nako_channel_id) {
+                    1
+                } else {
+                    0
+                }
+            } else {
+                0
+            };
+            let greet_text = dicts_lock
+                .lock()
+                .await
+                .get_greeting(&user_id, GREETING[greeting_index].0)
+                .unwrap_or_else(|| GREETING[greeting_index].1.to_string());
+            tracing::info!("{:?}", dicts_lock.lock().await);
+            let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
+                .make_read_text(&ctx)
+                .await;
+            play_raw_voice(&ctx, &text.text, 1, guild_id?).await;
+            Some(())
+        }
+        .await;
+    }
+    async fn message(&self, ctx: Context, msg: Message) {
+        let guild = msg.guild(&ctx.cache).await.unwrap();
+        let nako_id = ctx.cache.current_user_id().await;
+        let channel_id = guild
             .voice_states
-            .get(&nako_id)
-            .and_then(|voice_state| voice_state.channel_id)
-            .unwrap();
-        let channel_id = guild_id
+            .get(&msg.author.id)
             .unwrap()
-            .to_guild_cached(&ctx.cache)
-            .await
-            .unwrap()
-            .voice_states
-            .get(nako_id)
-            .and_then(|voice_state| voice_state.channel_id)
+            .channel_id
             .unwrap();
-        let members_count = ctx
+        let members = ctx
             .cache
             .channel(channel_id)
             .await
@@ -173,76 +248,12 @@ impl EventHandler for Handler {
             .await
             .unwrap()
             .iter()
-            .filter(|member| member.user.id.0 != nako_id.0)
-            .count();
-        if members_count == 0 {
-            meta::leave(&ctx, guild_id.unwrap()).await.ok();
-            return;
-        }
-        let user_id = new.user_id;
-        if nako_id.0 == user_id.0 {
-            return;
-        }
-        let user_name = &new.member.as_ref().unwrap().user.name;
-        let dicts_lock = {
-            let data_read = ctx.data.read().await;
-            data_read.get::<DictHandler>().unwrap().clone()
+            .map(|member| member.user.id)
+            .collect::<Vec<_>>();
+        if members.contains(&nako_id) && msg.author.id != nako_id {
+            dbg!(&msg);
+            play_voice(&ctx, msg).await;
         };
-        let greeting_index = if let Some(ref old) = old {
-            if old.self_mute != new.self_mute
-                || old.self_deaf != new.self_deaf
-                || old.self_video != new.self_video
-                || old.self_stream != new.self_stream
-            {
-                return;
-            }
-            if old.channel_id == Some(nako_channel_id) {
-                1
-            }
-            else {
-                0
-            }
-        } else {
-            0
-        };
-        let greet_text = dicts_lock
-            .lock()
-            .await
-            .get_greeting(&user_id, GREETING[greeting_index].0)
-            .unwrap_or_else(|| GREETING[greeting_index].1.to_string());
-        tracing::info!("{:?}",dicts_lock.lock().await);
-        let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
-            .make_read_text(&ctx)
-            .await;
-        play_raw_voice(&ctx, &text.text, guild_id.unwrap()).await;
-
-        tracing::info!("{:?}\n{:?}", old, new);
-        tracing::info!("{} is connected!", new.member.unwrap().user.name);
-    }
-     async fn message(&self, ctx: Context, msg: Message) {
-        let guild = msg.guild(&ctx.cache).await.unwrap();
-        let author_voice_states = guild.voice_states.get(&msg.author.id);
-        if let Some(states) = author_voice_states {
-            let channel_id = states.channel_id.unwrap();
-            let members = ctx
-                .cache
-                .channel(channel_id)
-                .await
-                .unwrap()
-                .guild()
-                .unwrap()
-                .members(&ctx.cache)
-                .await
-                .unwrap()
-                .iter()
-                .map(|member| member.user.id)
-                .collect::<Vec<_>>();
-            if members.contains(&ctx.cache.current_user_id().await) {
-                dbg!(&msg);
-                play_voice(&ctx, msg).await;
-            };
-        } else {
-        }
     }
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(command) = interaction {
@@ -311,8 +322,36 @@ impl EventHandler for Handler {
                         unreachable!()
                     }
                 }
+                "voice_test" => {
+                    let voice_type = &command
+                        .data
+                        .options
+                        .get(0)
+                        .expect("Expected integer")
+                        .resolved
+                        .as_ref()
+                        .expect("Expected integer");
+
+                    if let application_command::ApplicationCommandInteractionDataOptionValue::Integer(
+                            voice_type,
+                        )
+
+                     = voice_type
+                    {
+
+                        commands::voice::play_test_voice(
+                            &ctx,
+                            command.guild_id.unwrap(),
+                            *voice_type as u8,
+                        )
+                        .await
+                    } else {
+                        unreachable!()
+                    }
+                }
                 _ => Err("未実装だよ！".to_string()),
             };
+
             if let Err(why) = command
                 .create_interaction_response(&ctx.http, |response| {
                     response
@@ -339,8 +378,11 @@ impl songbird::EventHandler for TrackEndNotifier {
     async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
         if let EventContext::Track(track_list) = ctx {
             for (_, handle) in track_list.iter() {
-                std::fs::remove_file(Path::new(handle.metadata().source_url.as_ref().unwrap()))
-                    .unwrap();
+                let path = handle.metadata().source_url.as_ref().unwrap();
+                if path.starts_with("temp") {
+                    std::fs::remove_file(Path::new(handle.metadata().source_url.as_ref().unwrap()))
+                        .unwrap();
+                }
             }
         }
         None
@@ -379,9 +421,9 @@ async fn main() {
         .with_max_level(tracing::Level::INFO)
         .init();
     dotenv().ok();
+
     let application_id = std::env::var("APP_ID").unwrap().parse().unwrap();
     let token = std::env::var("DISCORD_TOKEN").expect("environment variable not found");
-    dbg!(&token);
     let framework = StandardFramework::new()
         .configure(|c| c.prefix(">"))
         .group(&GENERAL_GROUP);

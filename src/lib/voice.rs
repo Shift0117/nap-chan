@@ -1,4 +1,7 @@
-use std::io::Write;
+use std::{
+    fs::{File, OpenOptions},
+    io::Write,
+};
 
 use super::text::Text;
 use reqwest;
@@ -25,7 +28,7 @@ pub async fn play_voice(ctx: &Context, msg: Message) {
         content_safe(&ctx.cache, msg.content.clone(), &clean_option).await
     ));
     let cleaned = text.make_read_text(&ctx).await;
-    create_voice(&cleaned.text, &mut temp_file).await;
+    create_voice(&cleaned.text, 5, temp_file.as_file_mut()).await;
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
     let (_, path) = temp_file.keep().unwrap();
@@ -41,10 +44,10 @@ pub async fn play_voice(ctx: &Context, msg: Message) {
     }
 }
 
-async fn create_voice(text: &str, temp_file: &mut NamedTempFile) {
+pub async fn create_voice(text: &str, voice_type: u8, temp_file: &mut File) {
     dotenv::dotenv().ok();
     let base_url = std::env::var("BASE_URL").expect("environment variable not found");
-    let params = [("text", text), ("speaker", "5")];
+    let params = [("text", text), ("speaker", &voice_type.to_string())];
     let client = reqwest::Client::new();
     let voice_query_url = format!("{}/audio_query", base_url);
     let res = client
@@ -55,7 +58,7 @@ async fn create_voice(text: &str, temp_file: &mut NamedTempFile) {
         .expect("Panic in audio query");
     println!("{}", res.status());
     let synthesis_body = res.text().await.expect("Panic in get body");
-    let synthesis_arg = [("speaker", 5i16)];
+    let synthesis_arg = [("speaker", voice_type)];
     let synthesis_url = format!("{}/synthesis", base_url);
     let synthesis_res = client
         .post(synthesis_url)
@@ -70,9 +73,9 @@ async fn create_voice(text: &str, temp_file: &mut NamedTempFile) {
         .unwrap();
 }
 
-pub async fn play_raw_voice(ctx: &Context, str: &str, guild_id: GuildId) {
+pub async fn play_raw_voice(ctx: &Context, str: &str, voice_type: u8, guild_id: GuildId) {
     let mut temp_file = tempfile::Builder::new().tempfile_in("temp").unwrap();
-    create_voice(str, &mut temp_file).await;
+    create_voice(str, voice_type, temp_file.as_file_mut()).await;
     let (_, path) = temp_file.keep().unwrap();
     let manager = songbird::get(ctx)
         .await
@@ -83,5 +86,19 @@ pub async fn play_raw_voice(ctx: &Context, str: &str, guild_id: GuildId) {
         let mut source = songbird::ffmpeg(&path).await.unwrap();
         source.metadata.source_url = Some(path.to_string_lossy().to_string());
         handler.enqueue_source(source.into());
+    }
+}
+
+pub async fn create_sample_voices() {
+    std::fs::create_dir("temp").ok();
+    for i in 0..=5 {
+        if let Ok(mut file) = OpenOptions::new()
+            .write(true)
+            .read(true)
+            .create_new(true)
+            .open(format!("sample_voice/sample_{}", i))
+        {
+            create_voice(&format!("タイプ{}わこんな感じだよ", i), i, &mut file).await;
+        }
     }
 }

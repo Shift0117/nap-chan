@@ -1,14 +1,18 @@
 use std::{
     collections::HashMap,
-    fs::OpenOptions,
-    io::{Seek, Write},
+    fs::{File, OpenOptions},
+    io::{BufReader, Seek, Write},
     sync::Arc,
 };
 
 use serde_json::to_string;
 use serenity::{
     client::Context,
-    model::{id::UserId, interactions::application_command::ApplicationCommandInteraction},
+    model::{
+        id::{ChannelId, UserId},
+        interactions::application_command::ApplicationCommandInteraction,
+        prelude::User,
+    },
     prelude::TypeMapKey,
 };
 use tokio::sync::Mutex;
@@ -16,21 +20,23 @@ type SlashCommandResult = Result<String, String>;
 pub struct DictHandler;
 
 #[derive(Debug)]
-pub struct Dicts {
+pub struct State {
     pub dict: HashMap<String, String>,
     pub greeting_dict: HashMap<UserId, HashMap<String, String>>,
+    pub voice_type_dict: HashMap<UserId, u8>,
+    pub read_channel: Option<ChannelId>,
 }
 
-impl Dicts {
+impl State {
     pub fn get_greeting(&self, user_id: &UserId, kinds: &str) -> Option<String> {
         Some(self.greeting_dict.get(user_id)?.get(kinds)?.clone())
     }
 }
 
 impl TypeMapKey for DictHandler {
-    type Value = Arc<Mutex<Dicts>>;
+    type Value = Arc<Mutex<State>>;
 }
-use crate::lib::text::{DICT_PATH, GREETING_DICT_PATH};
+use crate::lib::text::{DICT_PATH, GREETING_DICT_PATH, VOICE_TYPE_DICT_PATH};
 
 pub async fn add(
     ctx: &Context,
@@ -118,42 +124,49 @@ pub async fn hello(
     ))
 }
 
-pub fn generate_dictonaries() -> Dicts {
+pub fn create_empty_json(path: &str) -> File {
+    let mut tmp = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .read(true)
+        .open(path)
+        .expect("File creation error");
+    tmp.write_all("{}".as_bytes()).ok();
+    tmp.seek(std::io::SeekFrom::Start(0)).ok();
+    tmp
+}
+
+pub fn generate_dictonaries() -> State {
     let dict_file = if let Ok(file) = std::fs::File::open(DICT_PATH) {
         file
     } else {
-        let mut tmp = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .read(true)
-            .open(DICT_PATH)
-            .expect("File creation error");
-        tmp.write_all("{}".as_bytes()).ok();
-        tmp.seek(std::io::SeekFrom::Start(0)).ok();
-
-        tmp
+        create_empty_json(DICT_PATH)
     };
     let greeting_dict_file = if let Ok(file) = std::fs::File::open(GREETING_DICT_PATH) {
         file
     } else {
-        let mut tmp = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .read(true)
-            .open(GREETING_DICT_PATH)
-            .expect("File creation error");
-        tmp.write_all("{}\n".as_bytes()).ok();
-        tmp.seek(std::io::SeekFrom::Start(0)).ok();
-        tmp
+        create_empty_json(GREETING_DICT_PATH)
     };
+    let voice_type_dict_file = if let Ok(file) = std::fs::File::open(VOICE_TYPE_DICT_PATH) {
+        file
+    } else {
+        create_empty_json(VOICE_TYPE_DICT_PATH)
+    };
+
     let reader = std::io::BufReader::new(dict_file);
     let dict: HashMap<String, String> = serde_json::from_reader(reader).expect("JSON parse error");
 
     let greeting_reader = std::io::BufReader::new(greeting_dict_file);
     let greeting_dict: HashMap<UserId, HashMap<String, String>> =
-        serde_json::from_reader(greeting_reader).unwrap();
-    Dicts {
+        serde_json::from_reader(greeting_reader).expect("JSON parse error");
+
+    let voice_type_reader = BufReader::new(voice_type_dict_file);
+    let voice_type_dict: HashMap<UserId, u8> =
+        serde_json::from_reader(voice_type_reader).expect("JSON parse error");
+    State {
         dict,
         greeting_dict,
+        voice_type_dict,
+        read_channel: None,
     }
 }
