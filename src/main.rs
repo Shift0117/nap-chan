@@ -239,7 +239,8 @@ impl EventHandler for Handler {
             let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
                 .make_read_text(&ctx)
                 .await;
-            play_raw_voice(&ctx, &text.text, 1, guild_id?).await;
+            let voice_type = *dicts_lock.lock().await.voice_type_dict.get(&user_id).unwrap_or(&1);
+            play_raw_voice(&ctx, &text.text, voice_type, guild_id?).await;
             Some(())
         }
         .await;
