@@ -2,10 +2,12 @@ use std::fs::File;
 
 use serenity::{
     client::Context,
-    model::{channel::Message, id::GuildId},
+    model::{channel::Message, id::GuildId, interactions::application_command::ApplicationCommandInteraction},
 };
 
 use crate::lib::voice::play_raw_voice;
+
+use super::dict::DictHandler;
 type SlashCommandResult = Result<String, String>;
 
 pub async fn play_test_voice(
@@ -27,3 +29,5 @@ pub async fn play_test_voice(
     }
     Ok(format!("タイプ{}はこんな感じだよ", voice_type).to_string())
 }
+
+

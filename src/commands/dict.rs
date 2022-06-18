@@ -170,3 +170,18 @@ pub fn generate_dictonaries() -> State {
         read_channel: None,
     }
 }
+
+pub async fn set_voice_type(
+    ctx: &Context,
+    command: &ApplicationCommandInteraction,
+    voice_type: u8,
+) -> SlashCommandResult {
+    let dict_lock = {
+        let data_read = ctx.data.read().await;
+        data_read.get::<DictHandler>().unwrap().clone()
+    };
+    let voice_type_dict = &mut dict_lock.lock().await.voice_type_dict;
+    let author_id = command.member.as_ref().unwrap().user.id;
+    voice_type_dict.insert(author_id, voice_type);
+    Ok(format!("ボイスタイプを{}に変えたよ",voice_type).to_string())
+}

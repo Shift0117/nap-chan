@@ -12,7 +12,7 @@ use serenity::{
 };
 use tempfile::{self, NamedTempFile};
 
-pub async fn play_voice(ctx: &Context, msg: Message) {
+pub async fn play_voice(ctx: &Context, msg: Message,voice_type:u8) {
     let mut temp_file = tempfile::Builder::new().tempfile_in("temp").unwrap();
     let clean_option = ContentSafeOptions::new();
     let text = Text::new(format!(
@@ -28,7 +28,7 @@ pub async fn play_voice(ctx: &Context, msg: Message) {
         content_safe(&ctx.cache, msg.content.clone(), &clean_option).await
     ));
     let cleaned = text.make_read_text(&ctx).await;
-    create_voice(&cleaned.text, 5, temp_file.as_file_mut()).await;
+    create_voice(&cleaned.text, voice_type, temp_file.as_file_mut()).await;
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
     let (_, path) = temp_file.keep().unwrap();
@@ -102,3 +102,4 @@ pub async fn create_sample_voices() {
         }
     }
 }
+

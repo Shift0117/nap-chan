@@ -53,7 +53,7 @@ impl EventHandler for Handler {
         tracing::info!("{:?}", &guild_ids);
 
         create_sample_voices().await;
-        
+
         /*let old_global_commands = ctx.http.get_global_application_commands().await.unwrap();
         for command in old_global_commands {
             dbg!(command.name);
@@ -136,7 +136,7 @@ impl EventHandler for Handler {
                     .create_application_command(|command| {
                         command
                             .name("voice_test")
-                            .description("ボイスのテストをします")
+                            .description("入力されたタイプのサンプルボイスを再生します")
                             .create_option(|option| {
                                 option
                                     .kind(
@@ -146,7 +146,23 @@ impl EventHandler for Handler {
                                     .min_int_value(0)
                                     .required(true)
                                     .name("type")
-                                    .description("voice type")
+                                    .description("0 から 5 の整数値")
+                            })
+                    })
+                    .create_application_command(|command| {
+                        command
+                            .name("set_voice_type")
+                            .description("ボイスタイプを変えます")
+                            .create_option(|option| {
+                                option
+                                    .kind(
+                                        application_command::ApplicationCommandOptionType::Integer,
+                                    )
+                                    .max_int_value(5)
+                                    .min_int_value(0)
+                                    .required(true)
+                                    .name("type")
+                                    .description("0 から 5 の整数値")
                             })
                     })
             })
@@ -250,9 +266,21 @@ impl EventHandler for Handler {
             .iter()
             .map(|member| member.user.id)
             .collect::<Vec<_>>();
+        let voice_type = *ctx
+            .data
+            .read()
+            .await
+            .get::<DictHandler>()
+            .unwrap()
+            .lock()
+            .await
+            .voice_type_dict
+            .get(&msg.author.id)
+            .unwrap_or(&1);
+
         if members.contains(&nako_id) && msg.author.id != nako_id {
             dbg!(&msg);
-            play_voice(&ctx, msg).await;
+            play_voice(&ctx, msg, voice_type).await;
         };
     }
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
@@ -348,6 +376,25 @@ impl EventHandler for Handler {
                     } else {
                         unreachable!()
                     }
+                }
+                "set_voice_type" => {
+                    let voice_type = &command
+                        .data
+                        .options
+                        .get(0)
+                        .expect("Expected integer")
+                        .resolved
+                        .as_ref()
+                        .expect("Expected integer");
+
+                    if let application_command::ApplicationCommandInteractionDataOptionValue::Integer(
+                            voice_type,
+                        )
+                     = voice_type {
+                        dict::set_voice_type(&ctx, &command, *voice_type as u8).await
+                     } else {
+                        unreachable!()
+                     }
                 }
                 _ => Err("未実装だよ！".to_string()),
             };
