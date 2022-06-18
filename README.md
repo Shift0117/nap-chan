@@ -3,8 +3,8 @@ nakochan https://github.com/niuez/nakochan のような discord の読み上げ 
 
 ## voicevox(coeiroink)を使った読み上げbot
 
-1. .env.sample に従って .env に bot の token、application id を入力します
-2. 自分のPCでvoicevoxのサーバを建てつつ、COEIROINK の `run.exe` を実行して使います
+1. COEIROINK の `run.exe` を実行します
+2. .env.sample に従って .env に bot の token,application id,COEIROINK が動いているアドレス(デフォルトはおそらく http://127.0.0.1:50031)を入力します
 3. 使いたいサーバーで `>register` を入力します
 4. 再起動すると slash command が有効化されます
 
