@@ -221,7 +221,7 @@ impl EventHandler for Handler {
             if nako_id.0 == user_id.0 {
                 return Some(());
             }
-            let user_name = &new.member.as_ref()?.user.name;
+            let user_name = &new.member.as_ref()?.nick.as_ref()?;
             let dicts_lock = {
                 let data_read = ctx.data.read().await;
                 data_read.get::<DictHandler>()?.clone()
@@ -497,10 +497,9 @@ async fn register(_ctx: &Context, msg: &Message) -> CommandResult {
         .open(GUILD_IDS_PATH)
         .unwrap();
     let reader = std::io::BufReader::new(&guilds_file);
-    let mut guild_ids: Vec<GuildId> = serde_json::from_reader(reader).expect("JSON parse error");
+    let mut guild_ids: HashSet<GuildId> = serde_json::from_reader(reader).expect("JSON parse error");
     guilds_file.seek(io::SeekFrom::Start(0)).ok();
-
-    guild_ids.push(guild_id);
+    guild_ids.insert(guild_id);
     let guild_ids_json = serde_json::to_string(&guild_ids).unwrap();
     guilds_file.write_all(guild_ids_json.as_bytes()).ok();
     tracing::info!("register finished");
