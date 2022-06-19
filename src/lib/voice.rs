@@ -10,9 +10,9 @@ use serenity::{
     model::{channel::Message, id::GuildId},
     utils::{content_safe, ContentSafeOptions},
 };
-use tempfile::{self, NamedTempFile};
+use tempfile;
 
-pub async fn play_voice(ctx: &Context, msg: Message,voice_type:u8) {
+pub async fn play_voice(ctx: &Context, msg: Message, voice_type: u8) {
     let mut temp_file = tempfile::Builder::new().tempfile_in("temp").unwrap();
     let clean_option = ContentSafeOptions::new();
     let text = Text::new(format!(
@@ -41,7 +41,6 @@ pub async fn play_voice(ctx: &Context, msg: Message,voice_type:u8) {
         let mut source = songbird::ffmpeg(&path).await.unwrap();
         source.metadata.source_url = Some(path.to_string_lossy().to_string());
         handler.enqueue_source(source.into());
-        
     }
 }
 
@@ -103,4 +102,3 @@ pub async fn create_sample_voices() {
         }
     }
 }
-

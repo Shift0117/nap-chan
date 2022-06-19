@@ -11,7 +11,6 @@ use serenity::{
     model::{
         id::{ChannelId, UserId},
         interactions::application_command::ApplicationCommandInteraction,
-        prelude::User,
     },
     prelude::TypeMapKey,
 };
@@ -62,7 +61,7 @@ pub async fn add(
         .unwrap();
     dict_file.write_all(dict_json.as_bytes()).unwrap();
     dict_file.flush().unwrap();
-    Ok(format!("これからは{}って読むね", after))
+    Ok(format!("これからは、{}を{}って読むね", before, after))
 }
 
 pub async fn rem(
@@ -107,6 +106,39 @@ pub async fn hello(
         .entry(author_id)
         .or_insert(HashMap::new())
         .insert("hello".to_string(), greet.to_string());
+    let greeting_dict_json = to_string(&greeting_dict).unwrap();
+    dbg!(&greeting_dict_json);
+    let mut dict_file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .truncate(true)
+        .open(GREETING_DICT_PATH)
+        .unwrap();
+    dict_file.write_all(greeting_dict_json.as_bytes()).unwrap();
+    dict_file.flush().unwrap();
+    Ok(format!(
+        "{}さん、これから{}ってあいさつするね",
+        command.member.as_ref().unwrap().user.name,
+        greet
+    ))
+}
+
+pub async fn bye(
+    ctx: &Context,
+    command: &ApplicationCommandInteraction,
+    greet: &str,
+) -> SlashCommandResult {
+    let dict_lock = {
+        let data_read = ctx.data.read().await;
+        data_read.get::<DictHandler>().unwrap().clone()
+    };
+    let mut dicts = dict_lock.lock().await;
+    let greeting_dict = &mut dicts.greeting_dict;
+    let author_id = command.member.as_ref().unwrap().user.id;
+    greeting_dict
+        .entry(author_id)
+        .or_insert(HashMap::new())
+        .insert("bye".to_string(), greet.to_string());
     let greeting_dict_json = to_string(&greeting_dict).unwrap();
     dbg!(&greeting_dict_json);
     let mut dict_file = std::fs::OpenOptions::new()
@@ -190,7 +222,9 @@ pub async fn set_voice_type(
         .truncate(true)
         .open(VOICE_TYPE_DICT_PATH)
         .unwrap();
-    dict_file.write_all(voice_type_dict_json.as_bytes()).unwrap();
+    dict_file
+        .write_all(voice_type_dict_json.as_bytes())
+        .unwrap();
     dict_file.flush().unwrap();
-    Ok(format!("ボイスタイプを{}に変えたよ",voice_type).to_string())
+    Ok(format!("ボイスタイプを{}に変えたよ", voice_type).to_string())
 }

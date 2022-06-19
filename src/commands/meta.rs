@@ -5,7 +5,7 @@ use serenity::{
 use songbird::{Event, TrackEvent};
 type SlashCommandResult = Result<String, String>;
 
-use crate::{lib::voice::play_raw_voice, TrackEndNotifier};
+use crate::TrackEndNotifier;
 
 use super::dict::DictHandler;
 pub async fn join(ctx: &Context, command: &ApplicationCommandInteraction) -> SlashCommandResult {
@@ -31,7 +31,14 @@ pub async fn join(ctx: &Context, command: &ApplicationCommandInteraction) -> Sla
     let mut handle = handle_lock.lock().await;
     handle.deafen(true).await.unwrap();
     handle.add_global_event(Event::Track(TrackEvent::End), TrackEndNotifier);
-    ctx.data.read().await.get::<DictHandler>().unwrap().lock().await.read_channel = Some(text_channel_id);
+    ctx.data
+        .read()
+        .await
+        .get::<DictHandler>()
+        .unwrap()
+        .lock()
+        .await
+        .read_channel = Some(text_channel_id);
     Ok("おはよ！".to_string())
 }
 

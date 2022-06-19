@@ -135,6 +135,18 @@ impl EventHandler for Handler {
                     })
                     .create_application_command(|command| {
                         command
+                            .name("bye")
+                            .description("出た時のあいさつを変えます")
+                            .create_option(|option| {
+                                option
+                                    .kind(application_command::ApplicationCommandOptionType::String)
+                                    .required(true)
+                                    .name("greet")
+                                    .description("string")
+                            })
+                    })
+                    .create_application_command(|command| {
+                        command
                             .name("play_sample_voice")
                             .description("入力されたタイプのサンプルボイスを再生します")
                             .create_option(|option| {
@@ -367,6 +379,21 @@ impl EventHandler for Handler {
                         unreachable!()
                     }
                 }
+                "bye" => {
+                    let greet = &command
+                        .data
+                        .options
+                        .get(0)
+                        .expect("Expected string")
+                        .resolved
+                        .as_ref()
+                        .expect("Expected string");
+                    if let application_command::ApplicationCommandInteractionDataOptionValue::String(greet) = greet {
+                        dict::bye(&ctx,&command,&greet).await
+                    } else {
+                        unreachable!()
+                    }
+                }
                 "play_sample_voice" => {
                     let voice_type = &command
                         .data
@@ -460,7 +487,7 @@ struct General;
 
 #[command]
 #[only_in(guilds)]
-async fn register(ctx: &Context, msg: &Message) -> CommandResult {
+async fn register(_ctx: &Context, msg: &Message) -> CommandResult {
     tracing::info!("register called");
     let guild_id = msg.guild_id.unwrap();
     let mut guilds_file = std::fs::OpenOptions::new()
