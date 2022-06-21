@@ -33,6 +33,7 @@ const GREETING: [(&str, &str); 2] = [("hello", "こんにちは"), ("bye", "ば�
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
+        
         tracing::info!("{} is connected!", ready.user.name);
         let guilds_file = if let Ok(file) = File::open(GUILD_IDS_PATH) {
             file
@@ -51,7 +52,6 @@ impl EventHandler for Handler {
         let guild_ids: HashSet<GuildId> =
             serde_json::from_reader(reader).expect("JSON parse error");
         tracing::info!("{:?}", &guild_ids);
-
         create_sample_voices().await;
 
         /*let old_global_commands = ctx.http.get_global_application_commands().await.unwrap();
@@ -315,6 +315,7 @@ impl EventHandler for Handler {
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(command) = interaction {
             println!("Received command interaction: {:#?}", command);
+            let mut voice_type = 1;
             let content = match command.data.name.as_str() {
                 "join" => meta::join(&ctx, &command).await,
                 "leave" => meta::leave(&ctx, command.guild_id.unwrap()).await,
@@ -395,7 +396,7 @@ impl EventHandler for Handler {
                     }
                 }
                 "play_sample_voice" => {
-                    let voice_type = &command
+                    let voice_type_args = &command
                         .data
                         .options
                         .get(0)
@@ -405,16 +406,16 @@ impl EventHandler for Handler {
                         .expect("Expected integer");
 
                     if let application_command::ApplicationCommandInteractionDataOptionValue::Integer(
-                            voice_type,
+                            voice_type_args,
                         )
 
-                     = voice_type
+                     = voice_type_args
                     {
-
+                        voice_type = *voice_type_args as u8;
                         commands::voice::play_sample_voice(
                             &ctx,
                             command.guild_id.unwrap(),
-                            *voice_type as u8,
+                            voice_type,
                         )
                         .await
                     } else {
@@ -448,7 +449,7 @@ impl EventHandler for Handler {
                     response
                         .kind(InteractionResponseType::ChannelMessageWithSource)
                         .interaction_response_data(|message| {
-                            message.content(match content {
+                            message.content(match content.clone() {
                                 Ok(content) => content,
                                 Err(error) => format!("エラー: {}", error).to_string(),
                             })
@@ -457,6 +458,10 @@ impl EventHandler for Handler {
                 .await
             {
                 println!("Cannot respond to slash command: {}", why);
+            } else {
+                if let Ok(content) = content {
+                    play_raw_voice(&ctx, &content, voice_type, command.guild_id.unwrap()).await;
+                }
             }
         }
     }
@@ -497,7 +502,8 @@ async fn register(_ctx: &Context, msg: &Message) -> CommandResult {
         .open(GUILD_IDS_PATH)
         .unwrap();
     let reader = std::io::BufReader::new(&guilds_file);
-    let mut guild_ids: HashSet<GuildId> = serde_json::from_reader(reader).expect("JSON parse error");
+    let mut guild_ids: HashSet<GuildId> =
+        serde_json::from_reader(reader).expect("JSON parse error");
     guilds_file.seek(io::SeekFrom::Start(0)).ok();
     guild_ids.insert(guild_id);
     let guild_ids_json = serde_json::to_string(&guild_ids).unwrap();

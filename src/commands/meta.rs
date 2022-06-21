@@ -4,7 +4,6 @@ use serenity::{
 };
 use songbird::{Event, TrackEvent};
 type SlashCommandResult = Result<String, String>;
-
 use crate::TrackEndNotifier;
 
 use super::dict::DictHandler;

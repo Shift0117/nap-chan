@@ -7,7 +7,7 @@ pub async fn play_sample_voice(
     guild_id: GuildId,
     voice_type: u8,
 ) -> SlashCommandResult {
-    let path = format!("sample_voice/sample_{}.wav", voice_type);
+    /*let path = format!("sample_voice/sample_{}.wav", voice_type);
     let manager = songbird::get(ctx)
         .await
         .expect("Songbird Voice client placed in at initialisation.")
@@ -17,6 +17,6 @@ pub async fn play_sample_voice(
         let mut source = songbird::ffmpeg(&path).await.unwrap();
         source.metadata.source_url = Some(path);
         handler.enqueue_source(source.into());
-    }
+    }*/
     Ok(format!("タイプ{}はこんな感じだよ", voice_type).to_string())
 }

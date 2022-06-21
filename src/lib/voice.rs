@@ -42,9 +42,7 @@ pub async fn play_voice(ctx: &Context, msg: Message, voice_type: u8) {
         let mut source = songbird::ffmpeg(&path).await.unwrap();
         source.metadata.source_url = Some(path.to_string_lossy().to_string());
         let (mut track, _) = songbird::tracks::create_player(source);
-        info!("track volume: {}", track.volume());
         track.set_volume(1.);
-        info!("changed track volume: {}", track.volume());
         handler.enqueue(track);
         //handler.enqueue_source(source.into());
     }
