@@ -1,7 +1,8 @@
 use regex;
 use serenity::client::Context;
 
-use crate::commands::dict::DictHandler;
+use crate::Handler;
+
 pub const DICT_PATH: &str = "read_dict.json";
 pub const GREETING_DICT_PATH: &str = "greeting_dict.json";
 pub const VOICE_TYPE_DICT_PATH: &str = "voice_type_dict.json";
@@ -21,15 +22,16 @@ impl Text {
         let re = regex::Regex::new(r"\|\|.+?\|\|").unwrap();
         Self::new(re.replace_all(&self.text, "").to_string())
     }
-    async fn replace_by_dict(&self, ctx: &Context) -> Self {
+    async fn replace_by_dict(&self, handler: &Handler) -> Self {
         let mut text = self.text.clone();
-        let dicts_lock = {
-            let data_read = ctx.data.read().await;
-            data_read.get::<DictHandler>().unwrap().clone()
-        };
-        let dicts = dicts_lock.lock().await;
-        for (k, v) in dicts.dict.iter() {
-            text = text.replace(k, v);
+        let dict = sqlx::query!("SELECT word,read_word FROM dict")
+            .fetch_all(&handler.dict)
+            .await
+            .unwrap();
+        for w in dict.iter() {
+            let before = &w.word;
+            let after = &w.read_word;
+            text = text.replace(before, after);
         }
         Self::new(text)
     }
@@ -37,11 +39,11 @@ impl Text {
         let re = regex::Regex::new(r"<@.+?>").unwrap();
         Self::new(re.replace_all(&self.text, "").to_string())
     }
-    pub async fn make_read_text(&self, ctx: &Context) -> Self {
+    pub async fn make_read_text(&self, handler:&Handler) -> Self {
         self.replace_url()
             .remove_spoiler()
             .remove_custom_emoji()
-            .replace_by_dict(ctx)
+            .replace_by_dict(handler)
             .await
     }
 }

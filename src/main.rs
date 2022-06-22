@@ -1,13 +1,14 @@
 mod commands;
 mod lib;
-use commands::{dict, meta};
+use commands::{meta};
 use dotenv::dotenv;
 use lib::voice::*;
 use serenity::client::{ClientBuilder, Context};
 use serenity::framework::standard::macros::{command, group};
 use serenity::framework::standard::CommandResult;
 use serenity::http::Http;
-use serenity::model::id::GuildId;
+use serenity::model::id::{GuildId, UserId};
+use serenity::model::interactions::application_command::ApplicationCommandInteraction;
 use serenity::model::interactions::{application_command, Interaction, InteractionResponseType};
 use serenity::model::prelude::VoiceState;
 use serenity::{
@@ -17,24 +18,112 @@ use serenity::{
     model::{channel::Message, gateway::Ready},
 };
 use songbird::{Event, EventContext, SerenityInit};
-use std::collections::HashSet;
+use sqlx::query;
+use std::collections::{HashMap, HashSet};
+use std::convert::TryInto;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Seek, Write};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::commands::dict::{generate_dictonaries, DictHandler};
-struct Handler;
+pub struct Handler {
+    user_config: sqlx::SqlitePool,
+    dict: sqlx::SqlitePool,
+    read_channel_id: Arc<Mutex<Option<serenity::model::id::ChannelId>>>
+}
 const GUILD_IDS_PATH: &str = "guilds.json";
 
-const GREETING: [(&str, &str); 2] = [("hello", "こんにちは"), ("bye", "ばいばい")];
+type SlashCommandResult = Result<String, String>;
+
+impl Handler {
+    pub async fn hello(
+        &self,
+        command: &ApplicationCommandInteraction,
+        greet: &str,
+    ) -> SlashCommandResult {
+        let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
+
+        sqlx::query!(
+            "INSERT OR REPLACE INTO user_config (user_id,hello) VALUES (?,?)",
+            user_id,
+            greet
+        )
+        .execute(&self.user_config)
+        .await
+        .ok();
+
+        Ok(format!(
+            "{}さん、これから{}ってあいさつするね",
+            command.member.as_ref().unwrap().user.name,
+            greet
+        ))
+    }
+    pub async fn bye(
+        &self,
+        command: &ApplicationCommandInteraction,
+        greet: &str,
+    ) -> SlashCommandResult {
+        let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
+        sqlx::query!(
+            "INSERT OR REPLACE INTO user_config (user_id,bye) VALUES (?,?)",
+            user_id,
+            greet
+        )
+        .execute(&self.user_config)
+        .await
+        .ok();
+
+        Ok(format!(
+            "{}さん、これから{}ってあいさつするね",
+            command.member.as_ref().unwrap().user.name,
+            greet
+        ))
+    }
+    pub async fn set_voice_type(
+        &self,
+        command: &ApplicationCommandInteraction,
+        voice_type: i64,
+    ) -> SlashCommandResult {
+        let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
+        sqlx::query!(
+            "INSERT OR REPLACE INTO user_config (user_id,voice_type) VALUES (?,?)",
+            user_id,
+            voice_type
+        )
+        .execute(&self.user_config)
+        .await
+        .ok();
+        Ok(format!("ボイスタイプを{}に変えたよ", voice_type).to_string())
+    }
+    pub async fn add(&self, before: &str, after: &str) -> SlashCommandResult {
+        sqlx::query!(
+            "INSERT OR REPLACE INTO dict (word,read_word) VALUES (?,?)",
+            before,
+            after
+        )
+        .execute(&self.dict)
+        .await
+        .ok();
+        Ok(format!("これからは、{}を{}って読むね", before, after))
+    }
+    pub async fn rem(&self, word: &str) -> SlashCommandResult {
+        if let Ok(_) = sqlx::query!("DELETE FROM dict WHERE word = ?", word)
+            .execute(&self.dict)
+            .await
+        {
+            Ok(format!("これからは{}って読むね", word))
+        } else {
+            Err("その単語は登録されてないよ！".to_string())
+        }
+    }
+}
 
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
-        
         tracing::info!("{} is connected!", ready.user.name);
+
         let guilds_file = if let Ok(file) = File::open(GUILD_IDS_PATH) {
             file
         } else {
@@ -52,7 +141,6 @@ impl EventHandler for Handler {
         let guild_ids: HashSet<GuildId> =
             serde_json::from_reader(reader).expect("JSON parse error");
         tracing::info!("{:?}", &guild_ids);
-        create_sample_voices().await;
 
         /*let old_global_commands = ctx.http.get_global_application_commands().await.unwrap();
         for command in old_global_commands {
@@ -222,11 +310,8 @@ impl EventHandler for Handler {
                 return Some(());
             }
             let user_name = &new.member.as_ref()?.nick.as_ref()?;
-            let dicts_lock = {
-                let data_read = ctx.data.read().await;
-                data_read.get::<DictHandler>()?.clone()
-            };
-            let greeting_index = if let Some(ref old) = old {
+ 
+            let greeting_type = if let Some(ref old) = old {
                 if old.self_mute != new.self_mute
                     || old.self_deaf != new.self_deaf
                     || old.self_video != new.self_video
@@ -242,21 +327,23 @@ impl EventHandler for Handler {
             } else {
                 0
             };
-            let greet_text = dicts_lock
-                .lock()
-                .await
-                .get_greeting(&user_id, GREETING[greeting_index].0)
-                .unwrap_or_else(|| GREETING[greeting_index].1.to_string());
-            tracing::info!("{:?}", dicts_lock.lock().await);
+            let uid = user_id.0 as i64;
+            let q = sqlx::query!(
+                "SELECT hello,bye,voice_type FROM user_config WHERE user_id = ?",
+                uid
+            )
+            .fetch_one(&self.user_config)
+            .await
+            .unwrap();
+            let greet_text = match greeting_type {
+                0 => q.hello,
+                1 => q.bye,
+                _ => unreachable!(),
+            };
             let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
-                .make_read_text(&ctx)
+                .make_read_text(&self)
                 .await;
-            let voice_type = *dicts_lock
-                .lock()
-                .await
-                .voice_type_dict
-                .get(&user_id)
-                .unwrap_or(&1);
+            let voice_type = q.voice_type.try_into().unwrap();
             play_raw_voice(&ctx, &text.text, voice_type, guild_id?).await;
             Some(())
         }
@@ -270,15 +357,9 @@ impl EventHandler for Handler {
             .get(&msg.author.id)
             .and_then(|voice_states| voice_states.channel_id);
         let text_channel_id = msg.channel_id;
-        let read_channel_id = ctx
-            .data
-            .read()
-            .await
-            .get::<DictHandler>()
-            .unwrap()
-            .lock()
-            .await
-            .read_channel;
+
+        let uid = msg.author.id.0 as i64;
+        let read_channel_id = self.read_channel_id.lock().await.clone();
         if read_channel_id == Some(text_channel_id) {
             if let Some(voice_channel_id) = voice_channel_id {
                 let members = ctx
@@ -294,20 +375,16 @@ impl EventHandler for Handler {
                     .iter()
                     .map(|member| member.user.id)
                     .collect::<Vec<_>>();
-                let voice_type = *ctx
-                    .data
-                    .read()
-                    .await
-                    .get::<DictHandler>()
-                    .unwrap()
-                    .lock()
-                    .await
-                    .voice_type_dict
-                    .get(&msg.author.id)
-                    .unwrap_or(&1);
+                let q = query!("SELECT voice_type FROM user_config WHERE user_id = ?", uid)
+                    .fetch_one(&self.user_config)
+                    .await;
+
+                let voice_type = q
+                    .and_then(|q| Ok(q.voice_type.try_into().unwrap()))
+                    .unwrap_or(1);
                 if members.contains(&nako_id) && msg.author.id != nako_id {
                     dbg!(&msg);
-                    play_voice(&ctx, msg, voice_type).await;
+                    play_voice(&ctx, msg, voice_type,self).await;
                 };
             }
         }
@@ -317,7 +394,7 @@ impl EventHandler for Handler {
             println!("Received command interaction: {:#?}", command);
             let mut voice_type = 1;
             let content = match command.data.name.as_str() {
-                "join" => meta::join(&ctx, &command).await,
+                "join" => meta::join(&ctx, &command,&self.read_channel_id).await,
                 "leave" => meta::leave(&ctx, command.guild_id.unwrap()).await,
                 "add" => {
                     let options = &command.data.options;
@@ -342,7 +419,7 @@ impl EventHandler for Handler {
                         ),
                     ) = (before, after)
                     {
-                        dict::add(&ctx, &command, before, after).await
+                        self.add(before, after).await
                     } else {
                         unreachable!()
                     }
@@ -357,7 +434,7 @@ impl EventHandler for Handler {
                         .as_ref()
                         .expect("Expected string");
                     if let application_command::ApplicationCommandInteractionDataOptionValue::String(word) = word {
-                        dict::rem(&ctx,&command,word).await
+                        self.rem(word).await
                     }
                     else {
                         unreachable!()
@@ -375,7 +452,8 @@ impl EventHandler for Handler {
                         .as_ref()
                         .expect("Expected string");
                     if let application_command::ApplicationCommandInteractionDataOptionValue::String(greet) = greet {
-                        dict::hello(&ctx,&command,&greet).await
+                        //dict::hello(&ctx,&command,&greet).await
+                        self.hello(&command, &greet).await
                     } else {
                         unreachable!()
                     }
@@ -390,7 +468,7 @@ impl EventHandler for Handler {
                         .as_ref()
                         .expect("Expected string");
                     if let application_command::ApplicationCommandInteractionDataOptionValue::String(greet) = greet {
-                        dict::bye(&ctx,&command,&greet).await
+                        self.bye(&command,&greet).await
                     } else {
                         unreachable!()
                     }
@@ -436,7 +514,7 @@ impl EventHandler for Handler {
                             voice_type,
                         )
                      = voice_type {
-                        dict::set_voice_type(&ctx, &command, *voice_type as u8).await
+                        self.set_voice_type(&command, *voice_type).await
                      } else {
                         unreachable!()
                      }
@@ -518,6 +596,32 @@ async fn main() {
         .with_max_level(tracing::Level::INFO)
         .init();
     dotenv().ok();
+    let user_config = sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect_with(
+            sqlx::sqlite::SqliteConnectOptions::new()
+                .filename("user_config.sqlite")
+                .create_if_missing(true),
+        )
+        .await
+        .expect("Couldn't connect to database");
+    sqlx::migrate!("./migrations")
+        .run(&user_config)
+        .await
+        .expect("Couldn't run database migrations");
+    let dict = sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect_with(
+            sqlx::sqlite::SqliteConnectOptions::new()
+                .filename("dict.sqlite")
+                .create_if_missing(true),
+        )
+        .await
+        .expect("Couldn't connect to database");
+    sqlx::migrate!("./migrations")
+        .run(&dict)
+        .await
+        .expect("Couldn't run database migrations");
 
     let application_id = std::env::var("APP_ID").unwrap().parse().unwrap();
     let token = std::env::var("DISCORD_TOKEN").expect("environment variable not found");
@@ -526,15 +630,11 @@ async fn main() {
         .group(&GENERAL_GROUP);
     let mut client =
         ClientBuilder::new_with_http(Http::new_with_token_application_id(&token, application_id))
-            .event_handler(Handler)
+            .event_handler(Handler { user_config, dict,read_channel_id:Arc::new(Mutex::new(None))})
             .framework(framework)
             .register_songbird()
             .await
             .expect("Err creating client");
-    {
-        let mut data = client.data.write().await;
-        data.insert::<DictHandler>(Arc::new(Mutex::new(generate_dictonaries())));
-    }
     std::fs::create_dir("temp").ok();
 
     tokio::spawn(async move {
