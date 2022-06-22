@@ -15,7 +15,7 @@ use serenity::{
 use tempfile;
 use tracing::info;
 
-pub async fn play_voice(ctx: &Context, msg: Message, voice_type: u8,handler:&Handler) {
+pub async fn play_voice(ctx: &Context, msg: Message, voice_type: u8, handler: &Handler) {
     let mut temp_file = tempfile::Builder::new().tempfile_in("temp").unwrap();
     let clean_option = ContentSafeOptions::new();
     let text = Text::new(format!(

@@ -39,7 +39,7 @@ impl Text {
         let re = regex::Regex::new(r"<@.+?>").unwrap();
         Self::new(re.replace_all(&self.text, "").to_string())
     }
-    pub async fn make_read_text(&self, handler:&Handler) -> Self {
+    pub async fn make_read_text(&self, handler: &Handler) -> Self {
         self.replace_url()
             .remove_spoiler()
             .remove_custom_emoji()

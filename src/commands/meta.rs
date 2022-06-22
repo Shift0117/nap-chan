@@ -2,14 +2,21 @@ use std::sync::Arc;
 
 use serenity::{
     client::Context,
-    model::{id::{GuildId, ChannelId}, interactions::application_command::ApplicationCommandInteraction},
+    model::{
+        id::{ChannelId, GuildId},
+        interactions::application_command::ApplicationCommandInteraction,
+    },
 };
 use songbird::{Event, TrackEvent};
 type SlashCommandResult = Result<String, String>;
-use tokio::sync::Mutex;
 use crate::TrackEndNotifier;
+use tokio::sync::Mutex;
 
-pub async fn join(ctx: &Context, command: &ApplicationCommandInteraction,read_channel_id:&Arc<Mutex<Option<ChannelId>>>) -> SlashCommandResult {
+pub async fn join(
+    ctx: &Context,
+    command: &ApplicationCommandInteraction,
+    read_channel_id: &Arc<Mutex<Option<ChannelId>>>,
+) -> SlashCommandResult {
     let guild_id = command.guild_id.unwrap();
     let author_id = command.member.as_ref().unwrap().user.id;
     let text_channel_id = command.channel_id;

@@ -43,7 +43,6 @@ impl Handler {
         greet: &str,
     ) -> SlashCommandResult {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
-
         sqlx::query!(
             "INSERT OR REPLACE INTO user_config (user_id,hello) VALUES (?,?)",
             user_id,
@@ -96,6 +95,7 @@ impl Handler {
         .ok();
         Ok(format!("ボイスタイプを{}に変えたよ", voice_type).to_string())
     }
+    
     pub async fn add(&self, before: &str, after: &str) -> SlashCommandResult {
         sqlx::query!(
             "INSERT OR REPLACE INTO dict (word,read_word) VALUES (?,?)",
