@@ -1,13 +1,22 @@
+use std::sync::Arc;
+
 use serenity::{
     client::Context,
-    model::{id::GuildId, interactions::application_command::ApplicationCommandInteraction},
+    model::{
+        id::{ChannelId, GuildId},
+        interactions::application_command::ApplicationCommandInteraction,
+    },
 };
 use songbird::{Event, TrackEvent};
 type SlashCommandResult = Result<String, String>;
 use crate::TrackEndNotifier;
+use tokio::sync::Mutex;
 
-use super::dict::DictHandler;
-pub async fn join(ctx: &Context, command: &ApplicationCommandInteraction) -> SlashCommandResult {
+pub async fn join(
+    ctx: &Context,
+    command: &ApplicationCommandInteraction,
+    read_channel_id: &Arc<Mutex<Option<ChannelId>>>,
+) -> SlashCommandResult {
     let guild_id = command.guild_id.unwrap();
     let author_id = command.member.as_ref().unwrap().user.id;
     let text_channel_id = command.channel_id;
@@ -30,14 +39,7 @@ pub async fn join(ctx: &Context, command: &ApplicationCommandInteraction) -> Sla
     let mut handle = handle_lock.lock().await;
     handle.deafen(true).await.unwrap();
     handle.add_global_event(Event::Track(TrackEvent::End), TrackEndNotifier);
-    ctx.data
-        .read()
-        .await
-        .get::<DictHandler>()
-        .unwrap()
-        .lock()
-        .await
-        .read_channel = Some(text_channel_id);
+    *read_channel_id.lock().await = Some(text_channel_id);
     Ok("おはよ！".to_string())
 }
 

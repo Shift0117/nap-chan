@@ -3,6 +3,8 @@ use std::{
     io::Write,
 };
 
+use crate::Handler;
+
 use super::text::Text;
 use reqwest;
 use serenity::{
@@ -13,7 +15,7 @@ use serenity::{
 use tempfile;
 use tracing::info;
 
-pub async fn play_voice(ctx: &Context, msg: Message, voice_type: u8) {
+pub async fn play_voice(ctx: &Context, msg: Message, voice_type: u8, handler: &Handler) {
     let mut temp_file = tempfile::Builder::new().tempfile_in("temp").unwrap();
     let clean_option = ContentSafeOptions::new();
     let text = Text::new(format!(
@@ -28,7 +30,7 @@ pub async fn play_voice(ctx: &Context, msg: Message, voice_type: u8) {
         },
         content_safe(&ctx.cache, msg.content.clone(), &clean_option).await
     ));
-    let cleaned = text.make_read_text(&ctx).await;
+    let cleaned = text.make_read_text(&handler).await;
     create_voice(&cleaned.text, voice_type, temp_file.as_file_mut()).await;
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
