@@ -114,8 +114,8 @@ impl Handler {
         Ok(format!(
             "{}に変えたよ",
             match generator_type {
-                0 => "VOICEVOX",
-                1 => "COEIROINK",
+                0 => "COEIROINK",
+                1 => "VOICEVOX",
                 _ => unreachable!(),
             }
         )
