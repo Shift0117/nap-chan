@@ -3,5 +3,4 @@
 *.json
 /temp
 /sample_voice
-
 /*.sql*

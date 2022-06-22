@@ -21,6 +21,7 @@ use songbird::{Event, EventContext, SerenityInit};
 use sqlx::query;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
+use std::f32::consts::E;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Seek, Write};
 use std::path::Path;
@@ -93,9 +94,34 @@ impl Handler {
         .execute(&self.user_config)
         .await
         .ok();
-        Ok(format!("ボイスタイプを{}に変えたよ", voice_type).to_string())
+        Ok(format!("ボイスタイプを {} に変えたよ", voice_type).to_string())
     }
-    
+
+    pub async fn set_generator_type(
+        &self,
+        command: &ApplicationCommandInteraction,
+        generator_type: i64,
+    ) -> SlashCommandResult {
+        let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
+        sqlx::query!(
+            "INSERT OR REPLACE INTO user_config (user_id,generator_type) VALUES (?,?)",
+            user_id,
+            generator_type
+        )
+        .execute(&self.user_config)
+        .await
+        .ok();
+        Ok(format!(
+            "{}に変えたよ",
+            match generator_type {
+                0 => "VOICEVOX",
+                1 => "COEIROINK",
+                _ => unreachable!(),
+            }
+        )
+        .to_string())
+    }
+
     pub async fn add(&self, before: &str, after: &str) -> SlashCommandResult {
         sqlx::query!(
             "INSERT OR REPLACE INTO dict (word,read_word) VALUES (?,?)",
@@ -105,14 +131,14 @@ impl Handler {
         .execute(&self.dict)
         .await
         .ok();
-        Ok(format!("これからは、{}を{}って読むね", before, after))
+        Ok(format!("これからは、{} を {} って読むね", before, after))
     }
     pub async fn rem(&self, word: &str) -> SlashCommandResult {
         if let Ok(_) = sqlx::query!("DELETE FROM dict WHERE word = ?", word)
             .execute(&self.dict)
             .await
         {
-            Ok(format!("これからは{}って読むね", word))
+            Ok(format!("これからは {} って読むね", word))
         } else {
             Err("その単語は登録されてないよ！".to_string())
         }
@@ -265,6 +291,22 @@ impl EventHandler for Handler {
                                     .description("0 から 5 の整数値")
                             })
                     })
+                    .create_application_command(|command| {
+                        command
+                            .name("set_generator_type")
+                            .description("音声合成に使うソフトを設定します。0:COEIROINK,1:VOICEVOX")
+                            .create_option(|option| {
+                                option
+                                    .kind(
+                                        application_command::ApplicationCommandOptionType::Integer,
+                                    )
+                                    .max_int_value(1)
+                                    .min_int_value(0)
+                                    .required(true)
+                                    .name("type")
+                                    .description("0 から 1 の整数値")
+                            })
+                    })
             })
             .await;
         }
@@ -328,30 +370,42 @@ impl EventHandler for Handler {
                 0
             };
             let uid = user_id.0 as i64;
-            sqlx::query!(
-                "INSERT OR IGNORE INTO user_config (user_id) VALUES (?)",
-                uid
-            )
-            .execute(&self.user_config)
-            .await
-            .ok();
+
             let q = sqlx::query!(
-                "SELECT hello,bye,voice_type FROM user_config WHERE user_id = ?",
+                "SELECT hello,bye,voice_type,generator_type FROM user_config WHERE user_id = ?",
                 uid
             )
             .fetch_one(&self.user_config)
-            .await
-            .unwrap();
-            let greet_text = match greeting_type {
-                0 => q.hello,
-                1 => q.bye,
-                _ => unreachable!(),
-            };
-            let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
-                .make_read_text(&self)
+            .await;
+            if let Ok(q) = q {
+                let greet_text = match greeting_type {
+                    0 => q.hello,
+                    1 => q.bye,
+                    _ => unreachable!(),
+                };
+                let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
+                    .make_read_text(&self)
+                    .await;
+                let voice_type = q.voice_type.try_into().unwrap();
+                play_raw_voice(
+                    &ctx,
+                    &text.text,
+                    voice_type,
+                    q.generator_type.try_into().unwrap(),
+                    guild_id?,
+                )
                 .await;
-            let voice_type = q.voice_type.try_into().unwrap();
-            play_raw_voice(&ctx, &text.text, voice_type, guild_id?).await;
+            } else {
+                let greet_text = match greeting_type {
+                    0 => "こんにちは",
+                    1 => "ばいばい",
+                    _ => unreachable!(),
+                };
+                let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
+                    .make_read_text(&self)
+                    .await;
+                play_raw_voice(&ctx, &text.text, 1, 1, guild_id?).await;
+            }
             Some(())
         }
         .await;
@@ -382,16 +436,10 @@ impl EventHandler for Handler {
                     .iter()
                     .map(|member| member.user.id)
                     .collect::<Vec<_>>();
-                let q = query!("SELECT voice_type FROM user_config WHERE user_id = ?", uid)
-                    .fetch_one(&self.user_config)
-                    .await;
 
-                let voice_type = q
-                    .and_then(|q| Ok(q.voice_type.try_into().unwrap()))
-                    .unwrap_or(1);
                 if members.contains(&nako_id) && msg.author.id != nako_id {
                     dbg!(&msg);
-                    play_voice(&ctx, msg, voice_type, self).await;
+                    play_voice(&ctx, msg, self).await;
                 };
             }
         }
@@ -400,6 +448,7 @@ impl EventHandler for Handler {
         if let Interaction::ApplicationCommand(command) = interaction {
             println!("Received command interaction: {:#?}", command);
             let mut voice_type = 1;
+            let mut generator_type = 1;
             let content = match command.data.name.as_str() {
                 "join" => meta::join(&ctx, &command, &self.read_channel_id).await,
                 "leave" => meta::leave(&ctx, command.guild_id.unwrap()).await,
@@ -508,7 +557,7 @@ impl EventHandler for Handler {
                     }
                 }
                 "set_voice_type" => {
-                    let voice_type = &command
+                    let voice_type_args = &command
                         .data
                         .options
                         .get(0)
@@ -518,10 +567,31 @@ impl EventHandler for Handler {
                         .expect("Expected integer");
 
                     if let application_command::ApplicationCommandInteractionDataOptionValue::Integer(
-                            voice_type,
+                            voice_type_args,
                         )
-                     = voice_type {
-                        self.set_voice_type(&command, *voice_type).await
+                     = voice_type_args {
+                        voice_type = (*voice_type_args).try_into().unwrap();
+                        self.set_voice_type(&command, *voice_type_args).await
+                     } else {
+                        unreachable!()
+                     }
+                }
+                "set_generator_type" => {
+                    let generator_type_args = &command
+                        .data
+                        .options
+                        .get(0)
+                        .expect("Expected integer")
+                        .resolved
+                        .as_ref()
+                        .expect("Expected integer");
+
+                    if let application_command::ApplicationCommandInteractionDataOptionValue::Integer(
+                            generator_type_args,
+                        )
+                     = generator_type_args {
+                        generator_type = (*generator_type_args).try_into().unwrap();
+                        self.set_generator_type(&command, *generator_type_args).await
                      } else {
                         unreachable!()
                      }
@@ -545,7 +615,14 @@ impl EventHandler for Handler {
                 println!("Cannot respond to slash command: {}", why);
             } else {
                 if let Ok(content) = content {
-                    play_raw_voice(&ctx, &content, voice_type, command.guild_id.unwrap()).await;
+                    play_raw_voice(
+                        &ctx,
+                        &content,
+                        voice_type,
+                        generator_type,
+                        command.guild_id.unwrap(),
+                    )
+                    .await;
                 }
             }
         }

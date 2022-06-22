@@ -1,4 +1,5 @@
 use std::{
+    convert::TryInto,
     fs::{File, OpenOptions},
     io::Write,
 };
@@ -15,9 +16,10 @@ use serenity::{
 use tempfile;
 use tracing::info;
 
-pub async fn play_voice(ctx: &Context, msg: Message, voice_type: u8, handler: &Handler) {
+pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
     let mut temp_file = tempfile::Builder::new().tempfile_in("temp").unwrap();
     let clean_option = ContentSafeOptions::new();
+    let user_id = msg.author.id.0 as i64;
     let text = Text::new(format!(
         "{} {}",
         if msg.author.id != ctx.cache.as_ref().current_user_id().await {
@@ -31,7 +33,28 @@ pub async fn play_voice(ctx: &Context, msg: Message, voice_type: u8, handler: &H
         content_safe(&ctx.cache, msg.content.clone(), &clean_option).await
     ));
     let cleaned = text.make_read_text(&handler).await;
-    create_voice(&cleaned.text, voice_type, temp_file.as_file_mut()).await;
+    let q = sqlx::query!(
+        "SELECT voice_type,generator_type FROM user_config WHERE user_id = ?",
+        user_id
+    )
+    .fetch_one(&handler.user_config)
+    .await;
+    let (voice_type,generator_type) = 
+    if let Ok(q) = q {
+        let voice_type = q.voice_type.try_into().unwrap();
+        let generator_type = q.generator_type.try_into().unwrap();
+        create_voice(
+            &cleaned.text,
+            voice_type,
+            generator_type,
+            temp_file.as_file_mut(),
+        )
+        .await;
+        (voice_type,generator_type)
+    } else {
+        create_voice(&cleaned.text, 1, 1, temp_file.as_file_mut()).await;
+        (1,0)
+    };
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
     let (_, path) = temp_file.keep().unwrap();
@@ -44,15 +67,22 @@ pub async fn play_voice(ctx: &Context, msg: Message, voice_type: u8, handler: &H
         let mut source = songbird::ffmpeg(&path).await.unwrap();
         source.metadata.source_url = Some(path.to_string_lossy().to_string());
         let (mut track, _) = songbird::tracks::create_player(source);
-        track.set_volume(1.);
+        if generator_type == 0 {
+            track.set_volume(0.64);
+        }
         handler.enqueue(track);
         //handler.enqueue_source(source.into());
     }
 }
 
-pub async fn create_voice(text: &str, voice_type: u8, temp_file: &mut File) {
+pub async fn create_voice(text: &str, voice_type: u8, generator_type: u8, temp_file: &mut File) {
     dotenv::dotenv().ok();
-    let base_url = std::env::var("BASE_URL").expect("environment variable not found");
+    let base_url = std::env::var(match generator_type {
+        0 => "BASE_URL_COEIRO",
+        1 => "BASE_URL_VOICEVOX",
+        _ => unreachable!(),
+    })
+    .expect("environment variable not found");
     let params = [("text", text), ("speaker", &voice_type.to_string())];
     let client = reqwest::Client::new();
     let voice_query_url = format!("{}/audio_query", base_url);
@@ -79,9 +109,15 @@ pub async fn create_voice(text: &str, voice_type: u8, temp_file: &mut File) {
         .unwrap();
 }
 
-pub async fn play_raw_voice(ctx: &Context, str: &str, voice_type: u8, guild_id: GuildId) {
+pub async fn play_raw_voice(
+    ctx: &Context,
+    str: &str,
+    voice_type: u8,
+    generator_type: u8,
+    guild_id: GuildId,
+) {
     let mut temp_file = tempfile::Builder::new().tempfile_in("temp").unwrap();
-    create_voice(str, voice_type, temp_file.as_file_mut()).await;
+    create_voice(str, voice_type, generator_type, temp_file.as_file_mut()).await;
     let (_, path) = temp_file.keep().unwrap();
     let manager = songbird::get(ctx)
         .await
@@ -92,19 +128,5 @@ pub async fn play_raw_voice(ctx: &Context, str: &str, voice_type: u8, guild_id: 
         let mut source = songbird::ffmpeg(&path).await.unwrap();
         source.metadata.source_url = Some(path.to_string_lossy().to_string());
         handler.enqueue_source(source.into());
-    }
-}
-
-pub async fn create_sample_voices() {
-    std::fs::create_dir("temp").ok();
-    for i in 0..=5 {
-        if let Ok(mut file) = OpenOptions::new()
-            .write(true)
-            .read(true)
-            .create_new(true)
-            .open(format!("sample_voice/sample_{}.wav", i))
-        {
-            create_voice(&format!("タイプ{}わこんな感じだよ", i), i, &mut file).await;
-        }
     }
 }
