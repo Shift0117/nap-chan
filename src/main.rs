@@ -1,6 +1,6 @@
 mod commands;
 mod lib;
-use commands::{meta};
+use commands::meta;
 use dotenv::dotenv;
 use lib::voice::*;
 use serenity::client::{ClientBuilder, Context};
@@ -30,7 +30,7 @@ use tokio::sync::Mutex;
 pub struct Handler {
     user_config: sqlx::SqlitePool,
     dict: sqlx::SqlitePool,
-    read_channel_id: Arc<Mutex<Option<serenity::model::id::ChannelId>>>
+    read_channel_id: Arc<Mutex<Option<serenity::model::id::ChannelId>>>,
 }
 const GUILD_IDS_PATH: &str = "guilds.json";
 
@@ -310,7 +310,7 @@ impl EventHandler for Handler {
                 return Some(());
             }
             let user_name = &new.member.as_ref()?.nick.as_ref()?;
- 
+
             let greeting_type = if let Some(ref old) = old {
                 if old.self_mute != new.self_mute
                     || old.self_deaf != new.self_deaf
@@ -328,6 +328,13 @@ impl EventHandler for Handler {
                 0
             };
             let uid = user_id.0 as i64;
+            sqlx::query!(
+                "INSERT OR IGNORE INTO user_config (user_id) VALUES (?)",
+                uid
+            )
+            .execute(&self.user_config)
+            .await
+            .ok();
             let q = sqlx::query!(
                 "SELECT hello,bye,voice_type FROM user_config WHERE user_id = ?",
                 uid
@@ -384,7 +391,7 @@ impl EventHandler for Handler {
                     .unwrap_or(1);
                 if members.contains(&nako_id) && msg.author.id != nako_id {
                     dbg!(&msg);
-                    play_voice(&ctx, msg, voice_type,self).await;
+                    play_voice(&ctx, msg, voice_type, self).await;
                 };
             }
         }
@@ -394,7 +401,7 @@ impl EventHandler for Handler {
             println!("Received command interaction: {:#?}", command);
             let mut voice_type = 1;
             let content = match command.data.name.as_str() {
-                "join" => meta::join(&ctx, &command,&self.read_channel_id).await,
+                "join" => meta::join(&ctx, &command, &self.read_channel_id).await,
                 "leave" => meta::leave(&ctx, command.guild_id.unwrap()).await,
                 "add" => {
                     let options = &command.data.options;
@@ -630,7 +637,11 @@ async fn main() {
         .group(&GENERAL_GROUP);
     let mut client =
         ClientBuilder::new_with_http(Http::new_with_token_application_id(&token, application_id))
-            .event_handler(Handler { user_config, dict,read_channel_id:Arc::new(Mutex::new(None))})
+            .event_handler(Handler {
+                user_config,
+                dict,
+                read_channel_id: Arc::new(Mutex::new(None)),
+            })
             .framework(framework)
             .register_songbird()
             .await
