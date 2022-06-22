@@ -37,10 +37,9 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
         "SELECT voice_type,generator_type FROM user_config WHERE user_id = ?",
         user_id
     )
-    .fetch_one(&handler.user_config)
+    .fetch_one(&handler.database)
     .await;
-    let (voice_type,generator_type) = 
-    if let Ok(q) = q {
+    let (voice_type, generator_type) = if let Ok(q) = q {
         let voice_type = q.voice_type.try_into().unwrap();
         let generator_type = q.generator_type.try_into().unwrap();
         create_voice(
@@ -50,10 +49,10 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
             temp_file.as_file_mut(),
         )
         .await;
-        (voice_type,generator_type)
+        (voice_type, generator_type)
     } else {
         create_voice(&cleaned.text, 1, 1, temp_file.as_file_mut()).await;
-        (1,0)
+        (1, 0)
     };
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;

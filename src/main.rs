@@ -18,7 +18,7 @@ use serenity::{
     model::{channel::Message, gateway::Ready},
 };
 use songbird::{Event, EventContext, SerenityInit};
-use sqlx::query;
+use sqlx::{query, query_as};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::f32::consts::E;
@@ -28,9 +28,21 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+pub struct UserConfig {
+    user_id: i64,
+    hello: String,
+    bye: String,
+    voice_type: i64,
+    generator_type: i64,
+}
+
+pub struct Dict {
+    word:String,
+    read_word:String
+}
+
 pub struct Handler {
-    user_config: sqlx::SqlitePool,
-    dict: sqlx::SqlitePool,
+    database: sqlx::SqlitePool,
     read_channel_id: Arc<Mutex<Option<serenity::model::id::ChannelId>>>,
 }
 const GUILD_IDS_PATH: &str = "guilds.json";
@@ -38,21 +50,47 @@ const GUILD_IDS_PATH: &str = "guilds.json";
 type SlashCommandResult = Result<String, String>;
 
 impl Handler {
+    pub async fn get_user_config_or_default(&self, user_id: i64) -> UserConfig {
+        query!("INSERT INTO user_config (user_id) VALUES (?)", user_id)
+            .execute(&self.database)
+            .await;
+        match query_as!(
+            UserConfig,
+            "SELECT * FROM user_config WHERE user_id = ?",
+            user_id
+        )
+        .fetch_optional(&self.database)
+        .await
+        .unwrap()
+        {
+            Some(data) => data,
+            None => {
+                unreachable!()
+            }
+        }
+    }
+    pub async fn update_user_config(&self, user_config: &UserConfig) -> u64 {
+        query!("UPDATE user_config SET hello = ?,bye = ?,voice_type = ?,generator_type = ? WHERE user_id = ?",
+        user_config.hello,user_config.bye,user_config.voice_type,user_config.generator_type,user_config.user_id)
+        .execute(&self.database).await.map_or(0, |result| result.rows_affected())
+    }
+
+    pub async fn update_dict(&self, dict: &Dict) -> u64 {
+        query!("INSERT OR REPLACE INTO dict VALUES (?,?)",
+        dict.word,dict.read_word
+        ) 
+        .execute(&self.database).await.map_or(0, |result| result.rows_affected())
+    }
+
     pub async fn hello(
         &self,
         command: &ApplicationCommandInteraction,
         greet: &str,
     ) -> SlashCommandResult {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
-        sqlx::query!(
-            "INSERT OR REPLACE INTO user_config (user_id,hello) VALUES (?,?)",
-            user_id,
-            greet
-        )
-        .execute(&self.user_config)
-        .await
-        .ok();
-
+        let mut user_config = self.get_user_config_or_default(user_id).await;
+        user_config.hello = greet.to_string();
+        self.update_user_config(&user_config).await;
         Ok(format!(
             "{}さん、これから{}ってあいさつするね",
             command.member.as_ref().unwrap().user.name,
@@ -65,15 +103,9 @@ impl Handler {
         greet: &str,
     ) -> SlashCommandResult {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
-        sqlx::query!(
-            "INSERT OR REPLACE INTO user_config (user_id,bye) VALUES (?,?)",
-            user_id,
-            greet
-        )
-        .execute(&self.user_config)
-        .await
-        .ok();
-
+        let mut user_config = self.get_user_config_or_default(user_id).await;
+        user_config.bye = greet.to_string();
+        self.update_user_config(&user_config).await;
         Ok(format!(
             "{}さん、これから{}ってあいさつするね",
             command.member.as_ref().unwrap().user.name,
@@ -86,14 +118,10 @@ impl Handler {
         voice_type: i64,
     ) -> SlashCommandResult {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
-        sqlx::query!(
-            "INSERT OR REPLACE INTO user_config (user_id,voice_type) VALUES (?,?)",
-            user_id,
-            voice_type
-        )
-        .execute(&self.user_config)
-        .await
-        .ok();
+        let mut user_config = self.get_user_config_or_default(user_id).await;
+        user_config.voice_type = voice_type;
+        self.update_user_config(&user_config).await;
+
         Ok(format!("ボイスタイプを {} に変えたよ", voice_type).to_string())
     }
 
@@ -103,14 +131,10 @@ impl Handler {
         generator_type: i64,
     ) -> SlashCommandResult {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
-        sqlx::query!(
-            "INSERT OR REPLACE INTO user_config (user_id,generator_type) VALUES (?,?)",
-            user_id,
-            generator_type
-        )
-        .execute(&self.user_config)
-        .await
-        .ok();
+        let mut user_config = self.get_user_config_or_default(user_id).await;
+        user_config.generator_type = generator_type;
+        self.update_user_config(&user_config).await;
+
         Ok(format!(
             "{}に変えたよ",
             match generator_type {
@@ -121,21 +145,14 @@ impl Handler {
         )
         .to_string())
     }
-
     pub async fn add(&self, before: &str, after: &str) -> SlashCommandResult {
-        sqlx::query!(
-            "INSERT OR REPLACE INTO dict (word,read_word) VALUES (?,?)",
-            before,
-            after
-        )
-        .execute(&self.dict)
-        .await
-        .ok();
+        let dict = Dict { word: before.to_string(), read_word: after.to_string() };
+        self.update_dict(&dict).await;
         Ok(format!("これからは、{} を {} って読むね", before, after))
     }
     pub async fn rem(&self, word: &str) -> SlashCommandResult {
         if let Ok(_) = sqlx::query!("DELETE FROM dict WHERE word = ?", word)
-            .execute(&self.dict)
+            .execute(&self.database)
             .await
         {
             Ok(format!("これからは {} って読むね", word))
@@ -375,7 +392,7 @@ impl EventHandler for Handler {
                 "SELECT hello,bye,voice_type,generator_type FROM user_config WHERE user_id = ?",
                 uid
             )
-            .fetch_one(&self.user_config)
+            .fetch_one(&self.database)
             .await;
             if let Ok(q) = q {
                 let greet_text = match greeting_type {
@@ -448,7 +465,7 @@ impl EventHandler for Handler {
         if let Interaction::ApplicationCommand(command) = interaction {
             println!("Received command interaction: {:#?}", command);
             let mut voice_type = 1;
-            let mut generator_type = 1;
+            let mut generator_type = 0;
             let content = match command.data.name.as_str() {
                 "join" => meta::join(&ctx, &command, &self.read_channel_id).await,
                 "leave" => meta::leave(&ctx, command.guild_id.unwrap()).await,
@@ -680,30 +697,17 @@ async fn main() {
         .with_max_level(tracing::Level::INFO)
         .init();
     dotenv().ok();
-    let user_config = sqlx::sqlite::SqlitePoolOptions::new()
+    let database = sqlx::sqlite::SqlitePoolOptions::new()
         .max_connections(5)
         .connect_with(
             sqlx::sqlite::SqliteConnectOptions::new()
-                .filename("user_config.sqlite")
+                .filename("database.sqlite")
                 .create_if_missing(true),
         )
         .await
         .expect("Couldn't connect to database");
     sqlx::migrate!("./migrations")
-        .run(&user_config)
-        .await
-        .expect("Couldn't run database migrations");
-    let dict = sqlx::sqlite::SqlitePoolOptions::new()
-        .max_connections(5)
-        .connect_with(
-            sqlx::sqlite::SqliteConnectOptions::new()
-                .filename("dict.sqlite")
-                .create_if_missing(true),
-        )
-        .await
-        .expect("Couldn't connect to database");
-    sqlx::migrate!("./migrations")
-        .run(&dict)
+        .run(&database)
         .await
         .expect("Couldn't run database migrations");
 
@@ -715,8 +719,7 @@ async fn main() {
     let mut client =
         ClientBuilder::new_with_http(Http::new_with_token_application_id(&token, application_id))
             .event_handler(Handler {
-                user_config,
-                dict,
+                database,
                 read_channel_id: Arc::new(Mutex::new(None)),
             })
             .framework(framework)

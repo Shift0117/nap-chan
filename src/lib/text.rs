@@ -1,11 +1,8 @@
 use regex;
-use serenity::client::Context;
 
 use crate::Handler;
 
-pub const DICT_PATH: &str = "read_dict.json";
-pub const GREETING_DICT_PATH: &str = "greeting_dict.json";
-pub const VOICE_TYPE_DICT_PATH: &str = "voice_type_dict.json";
+
 #[derive(Debug, Clone)]
 pub struct Text {
     pub text: String,
@@ -25,7 +22,7 @@ impl Text {
     async fn replace_by_dict(&self, handler: &Handler) -> Self {
         let mut text = self.text.clone();
         let dict = sqlx::query!("SELECT word,read_word FROM dict")
-            .fetch_all(&handler.dict)
+            .fetch_all(&handler.database)
             .await
             .unwrap();
         for w in dict.iter() {
