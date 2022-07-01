@@ -1,6 +1,5 @@
 use std::{convert::TryInto, fs::File, io::Write};
 
-use crate::Handler;
 use reqwest;
 use serenity::{
     client::Context,
@@ -8,6 +7,8 @@ use serenity::{
     utils::{content_safe, ContentSafeOptions},
 };
 use tempfile;
+
+use crate::handler::Handler;
 
 use super::text::TextMessage;
 

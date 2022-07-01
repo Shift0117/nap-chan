@@ -1,7 +1,7 @@
 use regex;
 use serenity::async_trait;
 
-use crate::Handler;
+use crate::handler;
 
 use super::db::DictDB;
 
