@@ -136,7 +136,6 @@ impl Handler {
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
-        tracing::info!("{} is connected!", ready.user.name);
 
         let guilds_file = if let Ok(file) = File::open(GUILD_IDS_PATH) {
             file
@@ -297,11 +296,22 @@ impl EventHandler for Handler {
                                 option
                                     .kind(application_command::ApplicationCommandOptionType::String)
                                     .required(true)
+                                    .name("nick")
+                                    .description("string")
                             })
                     })
             })
             .await;
+            match commands {
+                Ok(commands) => {
+                    for c in commands {
+                        tracing::info!("{:?}",c);
+                    }
+                },
+                Err(e) => {tracing::info!("{}",e.to_string())}
+            }
         }
+        tracing::info!("{} is connected!", ready.user.name);
     }
     async fn voice_state_update(
         &self,
@@ -581,6 +591,21 @@ impl EventHandler for Handler {
                      } else {
                         unreachable!()
                      }
+                },
+                "set_nickname" => {
+                    let nickname = &command
+                        .data
+                        .options
+                        .get(0)
+                        .expect("Expected string")
+                        .resolved
+                        .as_ref()
+                        .expect("Expected string");
+                    if let application_command::ApplicationCommandInteractionDataOptionValue::String(nickname) = nickname {
+                        self.set_nickname(&command,&nickname).await
+                    } else {
+                        unreachable!()
+                    }
                 }
                 _ => Err("未実装だよ！".to_string()),
             };

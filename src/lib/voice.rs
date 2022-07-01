@@ -10,7 +10,7 @@ use tempfile;
 
 use crate::handler::Handler;
 
-use super::text::TextMessage;
+use super::{db::UserConfigDB, text::TextMessage};
 
 pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
     let mut temp_file = tempfile::Builder::new().tempfile_in("temp").unwrap();
@@ -19,9 +19,17 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
     let text = format!(
         "{} {}",
         if msg.author.id != ctx.cache.as_ref().current_user_id().await {
-            match &msg.member.as_ref().expect("member not found?").nick {
-                Some(nick) => nick,
-                None => &msg.author.name,
+            match handler
+                .database
+                .get_user_config_or_default(user_id)
+                .await
+                .read_nickname
+            {
+                Some(nickname) => &nickname,
+                None => match &msg.member.as_ref().expect("member not found?").nick {
+                    Some(nick) => nick,
+                    None => &msg.author.name,
+                },
             }
         } else {
             ""
