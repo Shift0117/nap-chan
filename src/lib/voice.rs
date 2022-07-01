@@ -1,8 +1,5 @@
 use std::{convert::TryInto, fs::File, io::Write};
 
-use crate::Handler;
-
-use super::text::Text;
 use reqwest;
 use serenity::{
     client::Context,
@@ -11,23 +8,39 @@ use serenity::{
 };
 use tempfile;
 
+use crate::handler::Handler;
+
+use super::{db::UserConfigDB, text::TextMessage};
+
 pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
     let mut temp_file = tempfile::Builder::new().tempfile_in("temp").unwrap();
     let clean_option = ContentSafeOptions::new();
     let user_id = msg.author.id.0 as i64;
-    let text = Text::new(format!(
+    let v = handler
+        .database
+        .get_user_config_or_default(user_id)
+        .await
+        .read_nickname
+        .unwrap_or(
+            msg.member
+                .as_ref()
+                .expect("member not found")
+                .nick
+                .as_ref()
+                .unwrap_or(&msg.author.name)
+                .to_string(),
+        );
+
+    let text = format!(
         "{} {}",
         if msg.author.id != ctx.cache.as_ref().current_user_id().await {
-            match &msg.member.as_ref().expect("member not found?").nick {
-                Some(nick) => nick,
-                None => &msg.author.name,
-            }
+            &v
         } else {
             ""
         },
         content_safe(&ctx.cache, msg.content.clone(), &clean_option).await
-    ));
-    let cleaned = text.make_read_text(&handler).await;
+    );
+    let cleaned = text.make_read_text(&handler.database).await;
     let q = sqlx::query!(
         "SELECT voice_type,generator_type FROM user_config WHERE user_id = ?",
         user_id
@@ -38,7 +51,7 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
         let voice_type = q.voice_type.try_into().unwrap();
         let generator_type = q.generator_type.try_into().unwrap();
         create_voice(
-            &cleaned.text,
+            &cleaned,
             voice_type,
             generator_type,
             temp_file.as_file_mut(),
@@ -46,7 +59,7 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
         .await;
         (voice_type, generator_type)
     } else {
-        create_voice(&cleaned.text, 1, 1, temp_file.as_file_mut()).await;
+        create_voice(&cleaned, 1, 1, temp_file.as_file_mut()).await;
         (1, 0)
     };
     let guild = msg.guild(&ctx.cache).await.unwrap();
