@@ -35,8 +35,8 @@ impl UserConfigDB for sqlx::SqlitePool {
         }
     }
     async fn update_user_config(&self, user_config: &UserConfig) -> u64 {
-        query!("UPDATE user_config SET hello = ?,bye = ?,voice_type = ?,generator_type = ? WHERE user_id = ?",
-        user_config.hello,user_config.bye,user_config.voice_type,user_config.generator_type,user_config.user_id)
+        query!("UPDATE user_config SET hello = ?,bye = ?,voice_type = ?,generator_type = ?,read_nickname = ? WHERE user_id = ?",
+        user_config.hello,user_config.bye,user_config.voice_type,user_config.generator_type,user_config.read_nickname,user_config.user_id)
         .execute(self).await.map_or(0, |result| result.rows_affected())
     }
 }

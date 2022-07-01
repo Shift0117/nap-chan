@@ -31,7 +31,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::handler::{Handler, GUILD_IDS_PATH};
-
+#[derive(Debug)]
 pub struct UserConfig {
     user_id: i64,
     hello: String,

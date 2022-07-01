@@ -123,6 +123,7 @@ impl Handler {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
         let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.read_nickname = Some(nickname.to_string());
+        tracing::info!("{:?}",user_config);
         self.database.update_user_config(&user_config).await;
         Ok(format!(
             "{}さん、これからは{}って呼ぶね",
@@ -136,7 +137,6 @@ impl Handler {
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
-
         let guilds_file = if let Ok(file) = File::open(GUILD_IDS_PATH) {
             file
         } else {
@@ -305,10 +305,12 @@ impl EventHandler for Handler {
             match commands {
                 Ok(commands) => {
                     for c in commands {
-                        tracing::info!("{:?}",c);
+                        tracing::info!("{:?}", c);
                     }
-                },
-                Err(e) => {tracing::info!("{}",e.to_string())}
+                }
+                Err(e) => {
+                    tracing::info!("{}", e.to_string())
+                }
             }
         }
         tracing::info!("{} is connected!", ready.user.name);
@@ -591,7 +593,7 @@ impl EventHandler for Handler {
                      } else {
                         unreachable!()
                      }
-                },
+                }
                 "set_nickname" => {
                     let nickname = &command
                         .data
