@@ -33,6 +33,7 @@ pub struct UserConfig {
     bye: String,
     voice_type: i64,
     generator_type: i64,
+    read_nickname: Option<String>
 }
 
 pub struct Dict {
@@ -164,6 +165,18 @@ impl Handler {
         } else {
             Err("その単語は登録されてないよ！".to_string())
         }
+    }
+    pub async fn set_nickname(&self,command: &ApplicationCommandInteraction,nickname:&str) -> SlashCommandResult {
+        let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
+        let mut user_config = self.get_user_config_or_default(user_id).await;
+        user_config.read_nickname = Some(nickname.to_string());
+        self.update_user_config(&user_config).await;
+        Ok(format!(
+            "{}さん、これからは{}って呼ぶね",
+            command.member.as_ref().unwrap().user.name,
+            nickname.to_string()
+        )
+        .to_string())
     }
     
 }
@@ -329,6 +342,10 @@ impl EventHandler for Handler {
                                     .name("type")
                                     .description("0 から 1 の整数値")
                             })
+                    }).create_application_command(|command| {
+                        command.name("set_nickname").description("呼ぶ名前を設定します。").create_option(|option| {
+                            option.kind(application_command::ApplicationCommandOptionType::String).required(true)
+                        })
                     })
             })
             .await;
