@@ -2,6 +2,8 @@ mod commands;
 mod lib;
 use commands::meta;
 use dotenv::dotenv;
+use lib::db::{DictDB, UserConfigDB};
+use lib::text::TextMessage;
 use lib::voice::*;
 use serenity::client::{ClientBuilder, Context};
 use serenity::framework::standard::macros::{command, group};
@@ -33,7 +35,7 @@ pub struct UserConfig {
     bye: String,
     voice_type: i64,
     generator_type: i64,
-    read_nickname: Option<String>
+    read_nickname: Option<String>,
 }
 
 pub struct Dict {
@@ -50,51 +52,15 @@ const GUILD_IDS_PATH: &str = "guilds.json";
 type SlashCommandResult = Result<String, String>;
 
 impl Handler {
-    pub async fn get_user_config_or_default(&self, user_id: i64) -> UserConfig {
-        query!("INSERT INTO user_config (user_id) VALUES (?)", user_id)
-            .execute(&self.database)
-            .await;
-        match query_as!(
-            UserConfig,
-            "SELECT * FROM user_config WHERE user_id = ?",
-            user_id
-        )
-        .fetch_optional(&self.database)
-        .await
-        .unwrap()
-        {
-            Some(data) => data,
-            None => {
-                unreachable!()
-            }
-        }
-    }
-    pub async fn update_user_config(&self, user_config: &UserConfig) -> u64 {
-        query!("UPDATE user_config SET hello = ?,bye = ?,voice_type = ?,generator_type = ? WHERE user_id = ?",
-        user_config.hello,user_config.bye,user_config.voice_type,user_config.generator_type,user_config.user_id)
-        .execute(&self.database).await.map_or(0, |result| result.rows_affected())
-    }
-
-    pub async fn update_dict(&self, dict: &Dict) -> u64 {
-        query!(
-            "INSERT OR REPLACE INTO dict VALUES (?,?)",
-            dict.word,
-            dict.read_word
-        )
-        .execute(&self.database)
-        .await
-        .map_or(0, |result| result.rows_affected())
-    }
-
     pub async fn hello(
         &self,
         command: &ApplicationCommandInteraction,
         greet: &str,
     ) -> SlashCommandResult {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
-        let mut user_config = self.get_user_config_or_default(user_id).await;
+        let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.hello = greet.to_string();
-        self.update_user_config(&user_config).await;
+        self.database.update_user_config(&user_config).await;
         Ok(format!(
             "{}さん、これから{}ってあいさつするね",
             command.member.as_ref().unwrap().user.name,
@@ -107,9 +73,9 @@ impl Handler {
         greet: &str,
     ) -> SlashCommandResult {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
-        let mut user_config = self.get_user_config_or_default(user_id).await;
+        let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.bye = greet.to_string();
-        self.update_user_config(&user_config).await;
+        self.database.update_user_config(&user_config).await;
         Ok(format!(
             "{}さん、これから{}ってあいさつするね",
             command.member.as_ref().unwrap().user.name,
@@ -122,9 +88,9 @@ impl Handler {
         voice_type: i64,
     ) -> SlashCommandResult {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
-        let mut user_config = self.get_user_config_or_default(user_id).await;
+        let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.voice_type = voice_type;
-        self.update_user_config(&user_config).await;
+        self.database.update_user_config(&user_config).await;
         Ok(format!("ボイスタイプを {} に変えたよ", voice_type).to_string())
     }
 
@@ -134,9 +100,9 @@ impl Handler {
         generator_type: i64,
     ) -> SlashCommandResult {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
-        let mut user_config = self.get_user_config_or_default(user_id).await;
+        let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.generator_type = generator_type;
-        self.update_user_config(&user_config).await;
+        self.database.update_user_config(&user_config).await;
 
         Ok(format!(
             "{}に変えたよ",
@@ -153,7 +119,7 @@ impl Handler {
             word: before.to_string(),
             read_word: after.to_string(),
         };
-        self.update_dict(&dict).await;
+        self.database.update_dict(&dict).await;
         Ok(format!("これからは、{} を {} って読むね", before, after))
     }
     pub async fn rem(&self, word: &str) -> SlashCommandResult {
@@ -166,11 +132,15 @@ impl Handler {
             Err("その単語は登録されてないよ！".to_string())
         }
     }
-    pub async fn set_nickname(&self,command: &ApplicationCommandInteraction,nickname:&str) -> SlashCommandResult {
+    pub async fn set_nickname(
+        &self,
+        command: &ApplicationCommandInteraction,
+        nickname: &str,
+    ) -> SlashCommandResult {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
-        let mut user_config = self.get_user_config_or_default(user_id).await;
+        let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.read_nickname = Some(nickname.to_string());
-        self.update_user_config(&user_config).await;
+        self.database.update_user_config(&user_config).await;
         Ok(format!(
             "{}さん、これからは{}って呼ぶね",
             command.member.as_ref().unwrap().user.name,
@@ -178,7 +148,6 @@ impl Handler {
         )
         .to_string())
     }
-    
 }
 
 #[async_trait]
@@ -223,12 +192,12 @@ impl EventHandler for Handler {
                     .create_application_command(|command| {
                         command
                             .name("join")
-                            .description("なこちゃんに来てもらいます")
+                            .description("VCに参加します")
                     })
                     .create_application_command(|command| {
                         command
                             .name("leave")
-                            .description("なこちゃんとばいばいします")
+                            .description("VCから抜けます")
                     })
                     .create_application_command(|command| {
                         command
@@ -264,12 +233,12 @@ impl EventHandler for Handler {
                     .create_application_command(|command| {
                         command
                             .name("mute")
-                            .description("なこちゃんをミュートします")
+                            .description("botをミュートします")
                     })
                     .create_application_command(|command| {
                         command
                             .name("unmute")
-                            .description("なこちゃんのミュートを解除します")
+                            .description("botのミュートを解除します")
                     })
                     .create_application_command(|command| {
                         command
@@ -342,10 +311,16 @@ impl EventHandler for Handler {
                                     .name("type")
                                     .description("0 から 1 の整数値")
                             })
-                    }).create_application_command(|command| {
-                        command.name("set_nickname").description("呼ぶ名前を設定します。").create_option(|option| {
-                            option.kind(application_command::ApplicationCommandOptionType::String).required(true)
-                        })
+                    })
+                    .create_application_command(|command| {
+                        command
+                            .name("set_nickname")
+                            .description("呼ぶ名前を設定します。")
+                            .create_option(|option| {
+                                option
+                                    .kind(application_command::ApplicationCommandOptionType::String)
+                                    .required(true)
+                            })
                     })
             })
             .await;
@@ -358,19 +333,19 @@ impl EventHandler for Handler {
         old: Option<VoiceState>,
         new: VoiceState,
     ) {
-        let nako_id = &ctx.cache.current_user_id().await;
+        let bot_id = &ctx.cache.current_user_id().await;
         let _ = async move {
             let nako_channel_id = guild_id?
                 .to_guild_cached(&ctx.cache)
                 .await?
                 .voice_states
-                .get(&nako_id)?
+                .get(&bot_id)?
                 .channel_id?;
             let channel_id = guild_id?
                 .to_guild_cached(&ctx.cache)
                 .await?
                 .voice_states
-                .get(nako_id)?
+                .get(bot_id)?
                 .channel_id?;
             let members_count = ctx
                 .cache
@@ -381,14 +356,14 @@ impl EventHandler for Handler {
                 .await
                 .ok()?
                 .iter()
-                .filter(|member| member.user.id.0 != nako_id.0)
+                .filter(|member| member.user.id.0 != bot_id.0)
                 .count();
             if members_count == 0 {
                 meta::leave(&ctx, guild_id?).await.ok();
                 return Some(());
             }
             let user_id = new.user_id;
-            if nako_id.0 == user_id.0 {
+            if bot_id.0 == user_id.0 {
                 return Some(());
             }
             let user_name = &new.member.as_ref()?.nick.as_ref()?;
@@ -423,13 +398,13 @@ impl EventHandler for Handler {
                     1 => q.bye,
                     _ => unreachable!(),
                 };
-                let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
-                    .make_read_text(&self)
+                let text = format!("{}さん、{}", user_name, greet_text)
+                    .make_read_text(&self.database)
                     .await;
                 let voice_type = q.voice_type.try_into().unwrap();
                 play_raw_voice(
                     &ctx,
-                    &text.text,
+                    &text,
                     voice_type,
                     q.generator_type.try_into().unwrap(),
                     guild_id?,
@@ -441,10 +416,10 @@ impl EventHandler for Handler {
                     1 => "ばいばい",
                     _ => unreachable!(),
                 };
-                let text = lib::text::Text::new(format!("{}さん、{}", user_name, greet_text))
-                    .make_read_text(&self)
+                let text = format!("{}さん、{}", user_name, greet_text)
+                    .make_read_text(&self.database)
                     .await;
-                play_raw_voice(&ctx, &text.text, 1, 1, guild_id?).await;
+                play_raw_voice(&ctx, &text, 1, 1, guild_id?).await;
             }
             Some(())
         }
@@ -475,7 +450,6 @@ impl EventHandler for Handler {
                     .iter()
                     .map(|member| member.user.id)
                     .collect::<Vec<_>>();
-
                 if members.contains(&nako_id) && msg.author.id != nako_id {
                     dbg!(&msg);
                     play_voice(&ctx, msg, self).await;
