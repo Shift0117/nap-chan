@@ -21,7 +21,6 @@ use songbird::{Event, EventContext, SerenityInit};
 use sqlx::{query, query_as};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
-use std::f32::consts::E;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Seek, Write};
 use std::path::Path;
@@ -37,8 +36,8 @@ pub struct UserConfig {
 }
 
 pub struct Dict {
-    word:String,
-    read_word:String
+    word: String,
+    read_word: String,
 }
 
 pub struct Handler {
@@ -76,10 +75,14 @@ impl Handler {
     }
 
     pub async fn update_dict(&self, dict: &Dict) -> u64 {
-        query!("INSERT OR REPLACE INTO dict VALUES (?,?)",
-        dict.word,dict.read_word
-        ) 
-        .execute(&self.database).await.map_or(0, |result| result.rows_affected())
+        query!(
+            "INSERT OR REPLACE INTO dict VALUES (?,?)",
+            dict.word,
+            dict.read_word
+        )
+        .execute(&self.database)
+        .await
+        .map_or(0, |result| result.rows_affected())
     }
 
     pub async fn hello(
@@ -121,7 +124,6 @@ impl Handler {
         let mut user_config = self.get_user_config_or_default(user_id).await;
         user_config.voice_type = voice_type;
         self.update_user_config(&user_config).await;
-
         Ok(format!("ボイスタイプを {} に変えたよ", voice_type).to_string())
     }
 
@@ -146,7 +148,10 @@ impl Handler {
         .to_string())
     }
     pub async fn add(&self, before: &str, after: &str) -> SlashCommandResult {
-        let dict = Dict { word: before.to_string(), read_word: after.to_string() };
+        let dict = Dict {
+            word: before.to_string(),
+            read_word: after.to_string(),
+        };
         self.update_dict(&dict).await;
         Ok(format!("これからは、{} を {} って読むね", before, after))
     }
@@ -160,6 +165,7 @@ impl Handler {
             Err("その単語は登録されてないよ！".to_string())
         }
     }
+    
 }
 
 #[async_trait]
@@ -435,7 +441,6 @@ impl EventHandler for Handler {
             .get(&msg.author.id)
             .and_then(|voice_states| voice_states.channel_id);
         let text_channel_id = msg.channel_id;
-
         let uid = msg.author.id.0 as i64;
         let read_channel_id = self.read_channel_id.lock().await.clone();
         if read_channel_id == Some(text_channel_id) {
@@ -563,12 +568,8 @@ impl EventHandler for Handler {
                      = voice_type_args
                     {
                         voice_type = *voice_type_args as u8;
-                        commands::voice::play_sample_voice(
-                            &ctx,
-                            command.guild_id.unwrap(),
-                            voice_type,
-                        )
-                        .await
+                        Ok(format!("タイプ{}はこんな感じだよ",voice_type))
+
                     } else {
                         unreachable!()
                     }

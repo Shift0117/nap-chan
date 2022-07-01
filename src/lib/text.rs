@@ -2,7 +2,6 @@ use regex;
 
 use crate::Handler;
 
-
 #[derive(Debug, Clone)]
 pub struct Text {
     pub text: String,

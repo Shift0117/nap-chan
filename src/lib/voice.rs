@@ -1,8 +1,4 @@
-use std::{
-    convert::TryInto,
-    fs::{File, OpenOptions},
-    io::Write,
-};
+use std::{convert::TryInto, fs::File, io::Write};
 
 use crate::Handler;
 
@@ -14,7 +10,6 @@ use serenity::{
     utils::{content_safe, ContentSafeOptions},
 };
 use tempfile;
-use tracing::info;
 
 pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
     let mut temp_file = tempfile::Builder::new().tempfile_in("temp").unwrap();
@@ -39,7 +34,7 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
     )
     .fetch_one(&handler.database)
     .await;
-    let (voice_type, generator_type) = if let Ok(q) = q {
+    let (_, generator_type) = if let Ok(q) = q {
         let voice_type = q.voice_type.try_into().unwrap();
         let generator_type = q.generator_type.try_into().unwrap();
         create_voice(
@@ -67,7 +62,7 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
         source.metadata.source_url = Some(path.to_string_lossy().to_string());
         let (mut track, _) = songbird::tracks::create_player(source);
         if generator_type == 0 {
-            track.set_volume(0.64);
+            track.set_volume(0.4);
         }
         handler.enqueue(track);
         //handler.enqueue_source(source.into());
