@@ -1,3 +1,4 @@
+use rand::{thread_rng, Rng};
 use serenity::{
     async_trait,
     client::{Context, EventHandler},
@@ -21,7 +22,7 @@ use std::{
 use tokio::sync::Mutex;
 
 use crate::{
-    commands::meta,
+    commands::{meta, definition},
     lib::{
         db::{DictDB, UserConfigDB},
         text::TextMessage,
@@ -123,7 +124,7 @@ impl Handler {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
         let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.read_nickname = Some(nickname.to_string());
-        tracing::info!("{:?}",user_config);
+        tracing::info!("{:?}", user_config);
         self.database.update_user_config(&user_config).await;
         Ok(format!(
             "{}さん、これからは{}って呼ぶね",
@@ -132,11 +133,26 @@ impl Handler {
         )
         .to_string())
     }
+    pub async fn rand_member(&self,command: &ApplicationCommandInteraction,ctx:&Context) -> SlashCommandResult {
+        let guild_id = command.guild_id.ok_or("guild does not exist")?;
+        let guild = ctx.cache.guild(guild_id).await.ok_or("guild does not exist")?;
+        let vc_members = guild.voice_states.keys().collect::<Vec<_>>();
+        let len = vc_members.len();
+        let mut rng = thread_rng();
+        let i = rng.gen_range(0..len);        
+        let user_id = *vc_members[i];
+        
+        let member = ctx.cache.as_ref().member(&guild_id, &user_id).await.ok_or("member not found")?;
+        //Ok(format!("でけでけでけでけ・・・でん！{}",member.nick.unwrap_or(member.user.name)))
+        //Ok(user_id.to_string())
+        unimplemented!()
+    }
 }
 
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
+        
         let guilds_file = if let Ok(file) = File::open(GUILD_IDS_PATH) {
             file
         } else {
@@ -169,139 +185,7 @@ impl EventHandler for Handler {
                     .await
                     .ok();
             }*/
-            let commands = GuildId::set_application_commands(&guild_id, &ctx.http, |commands| {
-                commands
-                    .create_application_command(|command| {
-                        command.name("join").description("VCに参加します")
-                    })
-                    .create_application_command(|command| {
-                        command.name("leave").description("VCから抜けます")
-                    })
-                    .create_application_command(|command| {
-                        command
-                            .name("add")
-                            .create_option(|option| {
-                                option
-                                    .kind(application_command::ApplicationCommandOptionType::String)
-                                    .required(true)
-                                    .name("before")
-                                    .description("string")
-                            })
-                            .create_option(|option| {
-                                option
-                                    .kind(application_command::ApplicationCommandOptionType::String)
-                                    .required(true)
-                                    .description("string")
-                                    .name("after")
-                            })
-                            .description("before を after と読むようにします")
-                    })
-                    .create_application_command(|command| {
-                        command
-                            .name("rem")
-                            .create_option(|option| {
-                                option
-                                    .kind(application_command::ApplicationCommandOptionType::String)
-                                    .required(true)
-                                    .name("word")
-                                    .description("string")
-                            })
-                            .description("word の読み方を忘れます")
-                    })
-                    .create_application_command(|command| {
-                        command.name("mute").description("botをミュートします")
-                    })
-                    .create_application_command(|command| {
-                        command
-                            .name("unmute")
-                            .description("botのミュートを解除します")
-                    })
-                    .create_application_command(|command| {
-                        command
-                            .name("hello")
-                            .description("入った時のあいさつを変えます")
-                            .create_option(|option| {
-                                option
-                                    .kind(application_command::ApplicationCommandOptionType::String)
-                                    .required(true)
-                                    .name("greet")
-                                    .description("string")
-                            })
-                    })
-                    .create_application_command(|command| {
-                        command
-                            .name("bye")
-                            .description("出た時のあいさつを変えます")
-                            .create_option(|option| {
-                                option
-                                    .kind(application_command::ApplicationCommandOptionType::String)
-                                    .required(true)
-                                    .name("greet")
-                                    .description("string")
-                            })
-                    })
-                    .create_application_command(|command| {
-                        command
-                            .name("play_sample_voice")
-                            .description("入力されたタイプのサンプルボイスを再生します")
-                            .create_option(|option| {
-                                option
-                                    .kind(
-                                        application_command::ApplicationCommandOptionType::Integer,
-                                    )
-                                    .max_int_value(5)
-                                    .min_int_value(0)
-                                    .required(true)
-                                    .name("type")
-                                    .description("0 から 5 の整数値")
-                            })
-                    })
-                    .create_application_command(|command| {
-                        command
-                            .name("set_voice_type")
-                            .description("ボイスタイプを変えます")
-                            .create_option(|option| {
-                                option
-                                    .kind(
-                                        application_command::ApplicationCommandOptionType::Integer,
-                                    )
-                                    .max_int_value(5)
-                                    .min_int_value(0)
-                                    .required(true)
-                                    .name("type")
-                                    .description("0 から 5 の整数値")
-                            })
-                    })
-                    .create_application_command(|command| {
-                        command
-                            .name("set_generator_type")
-                            .description("音声合成に使うソフトを設定します。0:COEIROINK,1:VOICEVOX")
-                            .create_option(|option| {
-                                option
-                                    .kind(
-                                        application_command::ApplicationCommandOptionType::Integer,
-                                    )
-                                    .max_int_value(1)
-                                    .min_int_value(0)
-                                    .required(true)
-                                    .name("type")
-                                    .description("0 から 1 の整数値")
-                            })
-                    })
-                    .create_application_command(|command| {
-                        command
-                            .name("set_nickname")
-                            .description("呼ぶ名前を設定します。")
-                            .create_option(|option| {
-                                option
-                                    .kind(application_command::ApplicationCommandOptionType::String)
-                                    .required(true)
-                                    .name("nick")
-                                    .description("string")
-                            })
-                    })
-            })
-            .await;
+            let commands = definition::set_application_commands(&guild_id, &ctx.http).await;
             match commands {
                 Ok(commands) => {
                     for c in commands {
@@ -381,13 +265,22 @@ impl EventHandler for Handler {
             )
             .fetch_one(&self.database)
             .await;
+            let nickname = self
+                    .database
+                    .get_user_config_or_default(uid)
+                    .await
+                    .read_nickname
+                    .unwrap_or(
+                        user_name.to_string(),
+                    );
             if let Ok(q) = q {
                 let greet_text = match greeting_type {
                     0 => q.hello,
                     1 => q.bye,
                     _ => unreachable!(),
                 };
-                let text = format!("{}さん、{}", user_name, greet_text)
+                
+                let text = format!("{}さん、{}", nickname, greet_text)
                     .make_read_text(&self.database)
                     .await;
                 let voice_type = q.voice_type.try_into().unwrap();
@@ -405,7 +298,8 @@ impl EventHandler for Handler {
                     1 => "ばいばい",
                     _ => unreachable!(),
                 };
-                let text = format!("{}さん、{}", user_name, greet_text)
+
+                let text = format!("{}さん、{}", nickname, greet_text)
                     .make_read_text(&self.database)
                     .await;
                 play_raw_voice(&ctx, &text, 1, 1, guild_id?).await;
@@ -451,6 +345,7 @@ impl EventHandler for Handler {
             println!("Received command interaction: {:#?}", command);
             let mut voice_type = 1;
             let mut generator_type = 0;
+            
             let content = match command.data.name.as_str() {
                 "join" => meta::join(&ctx, &command, &self.read_channel_id).await,
                 "leave" => meta::leave(&ctx, command.guild_id.unwrap()).await,
@@ -608,7 +503,11 @@ impl EventHandler for Handler {
                     } else {
                         unreachable!()
                     }
-                }
+                },
+                "rand_member" => {
+                    //self.rand_member(&command,&ctx).await
+                    unimplemented!()
+                },
                 _ => Err("未実装だよ！".to_string()),
             };
 

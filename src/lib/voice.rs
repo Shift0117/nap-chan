@@ -16,7 +16,7 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
     let mut temp_file = tempfile::Builder::new().tempfile_in("temp").unwrap();
     let clean_option = ContentSafeOptions::new();
     let user_id = msg.author.id.0 as i64;
-    let v = handler
+    let nickname = handler
         .database
         .get_user_config_or_default(user_id)
         .await
@@ -34,7 +34,7 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
     let text = format!(
         "{} {}",
         if msg.author.id != ctx.cache.as_ref().current_user_id().await {
-            &v
+            &nickname
         } else {
             ""
         },
