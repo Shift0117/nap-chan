@@ -47,8 +47,6 @@ pub struct Dict {
     read_word: String,
 }
 
-type SlashCommandResult = Result<String, String>;
-
 struct TrackEndNotifier;
 
 #[async_trait]

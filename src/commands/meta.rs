@@ -10,13 +10,14 @@ use serenity::{
 use songbird::{Event, TrackEvent};
 type SlashCommandResult = Result<String, String>;
 use crate::TrackEndNotifier;
+use anyhow::{anyhow, Result};
 use tokio::sync::Mutex;
 
 pub async fn join(
     ctx: &Context,
     command: &ApplicationCommandInteraction,
     read_channel_id: &Arc<Mutex<Option<ChannelId>>>,
-) -> SlashCommandResult {
+) -> Result<String> {
     let guild_id = command.guild_id.unwrap();
     let author_id = command.member.as_ref().unwrap().user.id;
     let text_channel_id = command.channel_id;
@@ -43,7 +44,7 @@ pub async fn join(
     Ok("おはよ！".to_string())
 }
 
-pub async fn leave(ctx: &Context, guild_id: GuildId) -> SlashCommandResult {
+pub async fn leave(ctx: &Context, guild_id: GuildId) -> Result<String> {
     //let guild_id = command.guild_id.unwrap();
     let manager = songbird::get(&ctx)
         .await
@@ -51,14 +52,17 @@ pub async fn leave(ctx: &Context, guild_id: GuildId) -> SlashCommandResult {
         .clone();
     let has_handler = manager.get(guild_id).is_some();
     if has_handler {
-        manager.remove(guild_id).await.map_err(|e| e.to_string())?;
+        manager
+            .remove(guild_id)
+            .await
+            .map_err(|e| anyhow!("{}", e))?;
         Ok("ばいばい".to_string())
     } else {
-        Err("ボイスチャンネルに入ってないよ".to_string())
+        Err(anyhow!("ボイスチャンネルに入ってないよ"))
     }
 }
 
-pub async fn mute(ctx: &Context, command: &ApplicationCommandInteraction) -> SlashCommandResult {
+pub async fn mute(ctx: &Context, command: &ApplicationCommandInteraction) -> Result<String> {
     let guild_id = command.guild_id.unwrap();
     let manager = songbird::get(&ctx)
         .await
@@ -66,21 +70,21 @@ pub async fn mute(ctx: &Context, command: &ApplicationCommandInteraction) -> Sla
         .clone();
     let handler_lock = manager
         .get(guild_id)
-        .ok_or("ボイスチャンネルに入ってないよ")?;
+        .ok_or(anyhow!("ボイスチャンネルに入ってないよ"))?;
     let mut handler = handler_lock.lock().await;
 
     if handler.is_mute() {
-        Err("もうミュートしてるよ".to_string())
+        Err(anyhow!("もうミュートしてるよ"))
     } else {
         if let Err(e) = handler.mute(true).await {
-            Err(e.to_string())
+            Err(e.into())
         } else {
             Ok("ミュートしたよ".to_string())
         }
     }
 }
 
-pub async fn unmute(ctx: &Context, command: &ApplicationCommandInteraction) -> SlashCommandResult {
+pub async fn unmute(ctx: &Context, command: &ApplicationCommandInteraction) -> Result<String> {
     let guild_id = command.guild_id.unwrap();
     let manager = songbird::get(&ctx)
         .await
@@ -88,10 +92,10 @@ pub async fn unmute(ctx: &Context, command: &ApplicationCommandInteraction) -> S
         .clone();
     let handler_lock = manager
         .get(guild_id)
-        .ok_or("ボイスチャンネルに入ってないよ")?;
+        .ok_or(anyhow!("ボイスチャンネルに入ってないよ"))?;
     let mut handler = handler_lock.lock().await;
     if let Err(e) = handler.mute(false).await {
-        Err(e.to_string())
+        Err(e.into())
     } else {
         Ok("ミュート解除したよ".to_string())
     }

@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Result};
 use rand::{thread_rng, Rng};
 use serenity::{
     async_trait,
@@ -6,7 +7,9 @@ use serenity::{
         channel::Message,
         id::GuildId,
         interactions::{
-            application_command::{self, ApplicationCommandInteraction},
+            application_command::{
+                self, ApplicationCommandInteraction, ApplicationCommandInteractionDataOptionValue,
+            },
             Interaction, InteractionResponseType,
         },
         prelude::{Ready, VoiceState},
@@ -28,7 +31,7 @@ use crate::{
         text::TextMessage,
         voice::{play_raw_voice, play_voice},
     },
-    Dict, SlashCommandResult,
+    Dict,
 };
 pub const GUILD_IDS_PATH: &str = "guilds.json";
 
@@ -36,12 +39,20 @@ pub struct Handler {
     pub database: sqlx::SqlitePool,
     pub read_channel_id: Arc<Mutex<Option<serenity::model::id::ChannelId>>>,
 }
+type Command = ApplicationCommandInteraction;
+type ArgumentValue = ApplicationCommandInteractionDataOptionValue;
+fn get_argument(command: &Command, index: usize) -> Result<&ArgumentValue> {
+    command
+        .data
+        .options
+        .get(index)
+        .ok_or(anyhow!("index out of range"))?
+        .resolved
+        .as_ref()
+        .ok_or(anyhow!("could not parse"))
+}
 impl Handler {
-    pub async fn hello(
-        &self,
-        command: &ApplicationCommandInteraction,
-        greet: &str,
-    ) -> SlashCommandResult {
+    pub async fn hello(&self, command: &Command, greet: &str) -> Result<String> {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
         let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.hello = greet.to_string();
@@ -52,11 +63,7 @@ impl Handler {
             greet
         ))
     }
-    pub async fn bye(
-        &self,
-        command: &ApplicationCommandInteraction,
-        greet: &str,
-    ) -> SlashCommandResult {
+    pub async fn bye(&self, command: &Command, greet: &str) -> Result<String> {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
         let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.bye = greet.to_string();
@@ -67,11 +74,7 @@ impl Handler {
             greet
         ))
     }
-    pub async fn set_voice_type(
-        &self,
-        command: &ApplicationCommandInteraction,
-        voice_type: i64,
-    ) -> SlashCommandResult {
+    pub async fn set_voice_type(&self, command: &Command, voice_type: i64) -> Result<String> {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
         let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.voice_type = voice_type;
@@ -81,9 +84,9 @@ impl Handler {
 
     pub async fn set_generator_type(
         &self,
-        command: &ApplicationCommandInteraction,
+        command: &Command,
         generator_type: i64,
-    ) -> SlashCommandResult {
+    ) -> Result<String> {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
         let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.generator_type = generator_type;
@@ -98,7 +101,7 @@ impl Handler {
         )
         .to_string())
     }
-    pub async fn add(&self, before: &str, after: &str) -> SlashCommandResult {
+    pub async fn add(&self, before: &str, after: &str) -> Result<String> {
         let dict = Dict {
             word: before.to_string(),
             read_word: after.to_string(),
@@ -106,21 +109,17 @@ impl Handler {
         self.database.update_dict(&dict).await;
         Ok(format!("これからは、{} を {} って読むね", before, after))
     }
-    pub async fn rem(&self, word: &str) -> SlashCommandResult {
+    pub async fn rem(&self, word: &str) -> Result<String> {
         if let Ok(_) = sqlx::query!("DELETE FROM dict WHERE word = ?", word)
             .execute(&self.database)
             .await
         {
             Ok(format!("これからは {} って読むね", word))
         } else {
-            Err("その単語は登録されてないよ！".to_string())
+            Err(anyhow!("その単語は登録されてないよ！"))
         }
     }
-    pub async fn set_nickname(
-        &self,
-        command: &ApplicationCommandInteraction,
-        nickname: &str,
-    ) -> SlashCommandResult {
+    pub async fn set_nickname(&self, command: &Command, nickname: &str) -> Result<String> {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
         let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.read_nickname = Some(nickname.to_string());
@@ -133,33 +132,117 @@ impl Handler {
         )
         .to_string())
     }
-    pub async fn rand_member(
-        &self,
-        command: &ApplicationCommandInteraction,
-        ctx: &Context,
-    ) -> SlashCommandResult {
-        let guild_id = command.guild_id.ok_or("guild does not exist")?;
+    pub async fn rand_member(&self, command: &Command, ctx: &Context) -> Result<String> {
+        let guild_id = command.guild_id.ok_or(anyhow!("guild does not exist"))?;
         let guild = ctx
             .cache
             .guild(guild_id)
             .await
-            .ok_or("guild does not exist")?;
+            .ok_or(anyhow!("guild does not exist"))?;
         let voice_states = guild.voice_states;
         let vc_members = voice_states.keys().collect::<Vec<_>>();
         let len = vc_members.len();
         let i: usize = rand::random();
-        let r = rand::distributions::Uniform::new_inclusive(0, len-1);
-        
         let user_id = vc_members[i % len];
         let member = ctx
             .cache
             .member(guild_id, user_id)
             .await
-            .ok_or("member not found")?;
+            .ok_or(anyhow!("member not found"))?;
         Ok(format!(
             "でけでけでけでけ・・・でん！{}",
             member.nick.as_ref().unwrap_or(&member.user.name)
         ))
+    }
+
+    pub async fn interaction_create_with_result(
+        &self,
+        command: &Command,
+        ctx: &Context,
+        command_name: &str,
+        voice_type: &mut i64,
+        generator_type: &mut i64,
+    ) -> Result<String> {
+        match command_name {
+            "join" => meta::join(&ctx, &command, &self.read_channel_id).await,
+            "leave" => meta::leave(&ctx, command.guild_id.unwrap()).await,
+            "add" => {
+                let before = get_argument(command, 0)?;
+                let after = get_argument(command, 1)?;
+                if let (ArgumentValue::String(before), ArgumentValue::String(after)) =
+                    (before, after)
+                {
+                    self.add(before, after).await
+                } else {
+                    unreachable!()
+                }
+            }
+            "rem" => {
+                let word = get_argument(&command, 0).unwrap();
+                if let ArgumentValue::String(word) = word {
+                    self.rem(word).await
+                } else {
+                    unreachable!()
+                }
+            }
+            "mute" => meta::mute(&ctx, &command).await,
+            "unmute" => meta::unmute(&ctx, &command).await,
+            "hello" => {
+                let greet = get_argument(&command, 0)?;
+                if let ArgumentValue::String(greet) = greet {
+                    //dict::hello(&ctx,&command,&greet).await
+                    self.hello(&command, &greet).await
+                } else {
+                    unreachable!()
+                }
+            }
+            "bye" => {
+                let greet = get_argument(command, 0)?;
+                if let ArgumentValue::String(greet) = greet {
+                    self.bye(&command, &greet).await
+                } else {
+                    unreachable!()
+                }
+            }
+            "play_sample_voice" => {
+                let voice_type_args = get_argument(command, 0)?;
+                if let ArgumentValue::Integer(voice_type_args) = voice_type_args {
+                    *voice_type = *voice_type_args;
+                    Ok(format!("タイプ{}はこんな感じだよ", voice_type_args))
+                } else {
+                    unreachable!()
+                }
+            }
+            "set_voice_type" => {
+                let voice_type_args = get_argument(command, 0)?;
+                if let ArgumentValue::Integer(voice_type_args) = voice_type_args {
+                    *voice_type = *voice_type_args;
+                    self.set_voice_type(&command, *voice_type_args).await
+                } else {
+                    unreachable!()
+                }
+            }
+            "set_generator_type" => {
+                let generator_type_args = get_argument(command, 0)?;
+                if let ArgumentValue::Integer(generator_type_args) = generator_type_args {
+                    *generator_type = *generator_type_args;
+                    self.set_generator_type(&command, *generator_type_args)
+                        .await
+                } else {
+                    unreachable!()
+                }
+            }
+            "set_nickname" => {
+                let nickname = get_argument(command, 0)?;
+                if let ArgumentValue::String(nickname) = nickname {
+                    self.set_nickname(command, &nickname).await
+                } else {
+                    unreachable!()
+                }
+            }
+            "rand_member" => self.rand_member(&command, &ctx).await,
+            _ => Err(anyhow!("未実装だよ！")),
+        }
     }
 }
 
@@ -356,179 +439,23 @@ impl EventHandler for Handler {
             println!("Received command interaction: {:#?}", command);
             let mut voice_type = 1;
             let mut generator_type = 0;
-
-            let content = match command.data.name.as_str() {
-                "join" => meta::join(&ctx, &command, &self.read_channel_id).await,
-                "leave" => meta::leave(&ctx, command.guild_id.unwrap()).await,
-                "add" => {
-                    let options = &command.data.options;
-                    let before = options
-                        .get(0)
-                        .expect("Expected string")
-                        .resolved
-                        .as_ref()
-                        .expect("Expected string");
-                    let after = options
-                        .get(1)
-                        .expect("Expected string")
-                        .resolved
-                        .as_ref()
-                        .expect("Expected string");
-                    if let (
-                        application_command::ApplicationCommandInteractionDataOptionValue::String(
-                            before,
-                        ),
-                        application_command::ApplicationCommandInteractionDataOptionValue::String(
-                            after,
-                        ),
-                    ) = (before, after)
-                    {
-                        self.add(before, after).await
-                    } else {
-                        unreachable!()
-                    }
-                }
-                "rem" => {
-                    let word = &command
-                        .data
-                        .options
-                        .get(0)
-                        .expect("Expected string")
-                        .resolved
-                        .as_ref()
-                        .expect("Expected string");
-                    if let application_command::ApplicationCommandInteractionDataOptionValue::String(word) = word {
-                        self.rem(word).await
-                    }
-                    else {
-                        unreachable!()
-                    }
-                }
-                "mute" => meta::mute(&ctx, &command).await,
-                "unmute" => meta::unmute(&ctx, &command).await,
-                "hello" => {
-                    let greet = &command
-                        .data
-                        .options
-                        .get(0)
-                        .expect("Expected string")
-                        .resolved
-                        .as_ref()
-                        .expect("Expected string");
-                    if let application_command::ApplicationCommandInteractionDataOptionValue::String(greet) = greet {
-                        //dict::hello(&ctx,&command,&greet).await
-                        self.hello(&command, &greet).await
-                    } else {
-                        unreachable!()
-                    }
-                }
-                "bye" => {
-                    let greet = &command
-                        .data
-                        .options
-                        .get(0)
-                        .expect("Expected string")
-                        .resolved
-                        .as_ref()
-                        .expect("Expected string");
-                    if let application_command::ApplicationCommandInteractionDataOptionValue::String(greet) = greet {
-                        self.bye(&command,&greet).await
-                    } else {
-                        unreachable!()
-                    }
-                }
-                "play_sample_voice" => {
-                    let voice_type_args = &command
-                        .data
-                        .options
-                        .get(0)
-                        .expect("Expected integer")
-                        .resolved
-                        .as_ref()
-                        .expect("Expected integer");
-
-                    if let application_command::ApplicationCommandInteractionDataOptionValue::Integer(
-                            voice_type_args,
-                        )
-
-                     = voice_type_args
-                    {
-                        voice_type = *voice_type_args as u8;
-                        Ok(format!("タイプ{}はこんな感じだよ",voice_type))
-
-                    } else {
-                        unreachable!()
-                    }
-                }
-                "set_voice_type" => {
-                    let voice_type_args = &command
-                        .data
-                        .options
-                        .get(0)
-                        .expect("Expected integer")
-                        .resolved
-                        .as_ref()
-                        .expect("Expected integer");
-
-                    if let application_command::ApplicationCommandInteractionDataOptionValue::Integer(
-                            voice_type_args,
-                        )
-                     = voice_type_args {
-                        voice_type = (*voice_type_args).try_into().unwrap();
-                        self.set_voice_type(&command, *voice_type_args).await
-                     } else {
-                        unreachable!()
-                     }
-                }
-                "set_generator_type" => {
-                    let generator_type_args = &command
-                        .data
-                        .options
-                        .get(0)
-                        .expect("Expected integer")
-                        .resolved
-                        .as_ref()
-                        .expect("Expected integer");
-
-                    if let application_command::ApplicationCommandInteractionDataOptionValue::Integer(
-                            generator_type_args,
-                        )
-                     = generator_type_args {
-                        generator_type = (*generator_type_args).try_into().unwrap();
-                        self.set_generator_type(&command, *generator_type_args).await
-                     } else {
-                        unreachable!()
-                     }
-                }
-                "set_nickname" => {
-                    let nickname = &command
-                        .data
-                        .options
-                        .get(0)
-                        .expect("Expected string")
-                        .resolved
-                        .as_ref()
-                        .expect("Expected string");
-                    if let application_command::ApplicationCommandInteractionDataOptionValue::String(nickname) = nickname {
-                        self.set_nickname(&command,&nickname).await
-                    } else {
-                        unreachable!()
-                    }
-                }
-                "rand_member" => {
-                    self.rand_member(&command, &ctx).await
-                    //unimplemented!()
-                }
-                _ => Err("未実装だよ！".to_string()),
-            };
+            let content = self
+                .interaction_create_with_result(
+                    &command,
+                    &ctx,
+                    &command.data.name,
+                    &mut voice_type,
+                    &mut generator_type,
+                )
+                .await;
 
             if let Err(why) = command
                 .create_interaction_response(&ctx.http, |response| {
                     response
                         .kind(InteractionResponseType::ChannelMessageWithSource)
                         .interaction_response_data(|message| {
-                            message.content(match content.clone() {
-                                Ok(content) => content,
+                            message.content(match content.as_ref() {
+                                Ok(content) => content.clone(),
                                 Err(error) => format!("エラー: {}", error).to_string(),
                             })
                         })
@@ -541,8 +468,8 @@ impl EventHandler for Handler {
                     play_raw_voice(
                         &ctx,
                         &content,
-                        voice_type,
-                        generator_type,
+                        voice_type.try_into().unwrap(),
+                        generator_type.try_into().unwrap(),
                         command.guild_id.unwrap(),
                     )
                     .await;
