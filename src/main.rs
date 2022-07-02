@@ -41,6 +41,7 @@ pub struct UserConfig {
     read_nickname: Option<String>,
 }
 
+#[derive(Debug)]
 pub struct Dict {
     word: String,
     read_word: String,

@@ -22,7 +22,7 @@ use std::{
 use tokio::sync::Mutex;
 
 use crate::{
-    commands::{meta, definition},
+    commands::{definition, meta},
     lib::{
         db::{DictDB, UserConfigDB},
         text::TextMessage,
@@ -133,26 +133,39 @@ impl Handler {
         )
         .to_string())
     }
-    pub async fn rand_member(&self,command: &ApplicationCommandInteraction,ctx:&Context) -> SlashCommandResult {
+    pub async fn rand_member(
+        &self,
+        command: &ApplicationCommandInteraction,
+        ctx: &Context,
+    ) -> SlashCommandResult {
         let guild_id = command.guild_id.ok_or("guild does not exist")?;
-        let guild = ctx.cache.guild(guild_id).await.ok_or("guild does not exist")?;
-        let vc_members = guild.voice_states.keys().collect::<Vec<_>>();
+        let guild = ctx
+            .cache
+            .guild(guild_id)
+            .await
+            .ok_or("guild does not exist")?;
+        let voice_states = guild.voice_states;
+        let vc_members = voice_states.keys().collect::<Vec<_>>();
         let len = vc_members.len();
-        let mut rng = thread_rng();
-        let i = rng.gen_range(0..len);        
-        let user_id = *vc_members[i];
+        let i: usize = rand::random();
+        let r = rand::distributions::Uniform::new_inclusive(0, len-1);
         
-        let member = ctx.cache.as_ref().member(&guild_id, &user_id).await.ok_or("member not found")?;
-        //Ok(format!("でけでけでけでけ・・・でん！{}",member.nick.unwrap_or(member.user.name)))
-        //Ok(user_id.to_string())
-        unimplemented!()
+        let user_id = vc_members[i % len];
+        let member = ctx
+            .cache
+            .member(guild_id, user_id)
+            .await
+            .ok_or("member not found")?;
+        Ok(format!(
+            "でけでけでけでけ・・・でん！{}",
+            member.nick.as_ref().unwrap_or(&member.user.name)
+        ))
     }
 }
 
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
-        
         let guilds_file = if let Ok(file) = File::open(GUILD_IDS_PATH) {
             file
         } else {
@@ -266,20 +279,18 @@ impl EventHandler for Handler {
             .fetch_one(&self.database)
             .await;
             let nickname = self
-                    .database
-                    .get_user_config_or_default(uid)
-                    .await
-                    .read_nickname
-                    .unwrap_or(
-                        user_name.to_string(),
-                    );
+                .database
+                .get_user_config_or_default(uid)
+                .await
+                .read_nickname
+                .unwrap_or(user_name.to_string());
             if let Ok(q) = q {
                 let greet_text = match greeting_type {
                     0 => q.hello,
                     1 => q.bye,
                     _ => unreachable!(),
                 };
-                
+
                 let text = format!("{}さん、{}", nickname, greet_text)
                     .make_read_text(&self.database)
                     .await;
@@ -345,7 +356,7 @@ impl EventHandler for Handler {
             println!("Received command interaction: {:#?}", command);
             let mut voice_type = 1;
             let mut generator_type = 0;
-            
+
             let content = match command.data.name.as_str() {
                 "join" => meta::join(&ctx, &command, &self.read_channel_id).await,
                 "leave" => meta::leave(&ctx, command.guild_id.unwrap()).await,
@@ -503,11 +514,11 @@ impl EventHandler for Handler {
                     } else {
                         unreachable!()
                     }
-                },
+                }
                 "rand_member" => {
-                    //self.rand_member(&command,&ctx).await
-                    unimplemented!()
-                },
+                    self.rand_member(&command, &ctx).await
+                    //unimplemented!()
+                }
                 _ => Err("未実装だよ！".to_string()),
             };
 

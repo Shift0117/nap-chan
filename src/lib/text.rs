@@ -25,8 +25,9 @@ impl TextMessage for String {
     }
     async fn replace_by_dict(&self, database: &sqlx::SqlitePool) -> Self {
         let mut text = self.clone();
-
         for w in database.get_dict_all().await {
+            tracing::info!("{:?} {:?}", &w, &text);
+
             let before = &w.word;
             let after = &w.read_word;
             text = text.replace(before, after);
