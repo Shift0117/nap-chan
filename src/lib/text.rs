@@ -1,5 +1,5 @@
 use std::{
-    io::{Read, Stdout},
+    io::Read,
     process::{Command, Stdio},
 };
 
@@ -7,12 +7,7 @@ use regex;
 use serenity::async_trait;
 
 use super::db::DictDB;
-use wana_kana::{
-    is_katakana::is_katakana,
-    is_romaji::is_romaji,
-    to_kana::*,
-    to_katakana::{to_katakana, to_katakana_with_opt},
-};
+use wana_kana::{is_katakana::is_katakana, to_katakana::to_katakana};
 #[async_trait]
 pub trait TextMessage {
     fn replace_url(&self) -> Self;
@@ -48,27 +43,25 @@ impl TextMessage for String {
         for c in re.captures_iter(self) {
             if let Some(english_match) = c.get(0) {
                 let english = english_match.as_str();
-                let res = Command::new("alkana")
-                    .arg(english)
-                    .stdout(Stdio::piped())
-                    .spawn()
-                    .expect("alkana command failed to start");
-
-                let mut out = res.stdout.unwrap();
-                let mut buf = String::new();
-                out.read_to_string(&mut buf).ok();
-                if buf.ends_with('\n') {
-                    buf.pop();
-                    if buf.ends_with('\r') {
-                        buf.pop();
-                    }
-                }
-                if !buf.is_empty() {
-                    text = text.replace(&english, &buf);
+                let result = alkana(english);
+                // alkana で変換できたとき
+                if let Some(result) = result {
+                    text = text.replacen(english, &result,1);
                 } else {
                     let katakana = to_katakana(english);
                     if is_katakana(&katakana) {
-                        text = text.replace(&english, &katakana);
+                        text = text.replace(english, &katakana);
+                    } else {
+                        let n = english.len();
+                        for i in 1..n {
+                            // firewall -> fire wall のように単語の区切りを探す
+                            // 3つ以上でも区切りたいが計算量がすごくなってしまいそう
+                            let (first, last) = english.split_at(i);
+                            if let (Some(first_res),Some(last_res)) = (alkana(first),alkana(last)) {
+                                text = text.replacen(first, &first_res, 1);
+                                text = text.replacen(last,&last_res,1);
+                            }
+                        }
                     }
                 }
             }
@@ -86,6 +79,28 @@ impl TextMessage for String {
             .replace_by_dict(database)
             .await
             .hiraganize()
+    }
+}
+
+fn alkana(word: &str) -> Option<String> {
+    let res = Command::new("alkana")
+        .arg(word)
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("alkana command failed to start");
+    let mut out = res.stdout.unwrap();
+    let mut buf = String::new();
+    out.read_to_string(&mut buf).ok();
+    if buf.ends_with('\n') {
+        buf.pop();
+        if buf.ends_with('\r') {
+            buf.pop();
+        }
+    }
+    if buf.is_empty() {
+        None
+    } else {
+        Some(buf)
     }
 }
 
