@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use crate::TrackEndNotifier;
+use anyhow::{anyhow, Result};
 use serenity::{
     client::Context,
     model::{
@@ -8,9 +10,6 @@ use serenity::{
     },
 };
 use songbird::{Event, TrackEvent};
-type SlashCommandResult = Result<String, String>;
-use crate::TrackEndNotifier;
-use anyhow::{anyhow, Result};
 use tokio::sync::Mutex;
 
 pub async fn join(

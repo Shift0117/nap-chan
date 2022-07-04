@@ -46,6 +46,7 @@ pub trait DictDB {
     async fn update_dict(&self, dict: &Dict) -> u64;
     async fn get_dict(&self, word: &str) -> Result<String>;
     async fn get_dict_all(&self) -> Vec<Dict>;
+    async fn remove(&self, word: &str) -> Result<()>;
 }
 
 #[async_trait]
@@ -72,5 +73,12 @@ impl DictDB for sqlx::SqlitePool {
             .fetch_all(self)
             .await
             .unwrap()
+    }
+    async fn remove(&self, word: &str) -> Result<()> {
+        sqlx::query!("DELETE FROM dict WHERE word = ?", word)
+            .execute(self)
+            .await
+            .map_err(|e| e.into())
+            .map(|_| ())
     }
 }

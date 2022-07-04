@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Result};
-use rand::{thread_rng, Rng};
 use serenity::{
     async_trait,
     client::{Context, EventHandler},
@@ -110,10 +109,7 @@ impl Handler {
         Ok(format!("これからは、{} を {} って読むね", before, after))
     }
     pub async fn rem(&self, word: &str) -> Result<String> {
-        if let Ok(_) = sqlx::query!("DELETE FROM dict WHERE word = ?", word)
-            .execute(&self.database)
-            .await
-        {
+        if let Ok(_) = self.database.remove(word).await {
             Ok(format!("これからは {} って読むね", word))
         } else {
             Err(anyhow!("その単語は登録されてないよ！"))
@@ -173,6 +169,7 @@ impl Handler {
                     (before, after)
                 {
                     self.add(before, after).await
+                    //self.database.update_dict(&Dict { word: before.to_string(), read_word: after }).await
                 } else {
                     unreachable!()
                 }
@@ -355,49 +352,26 @@ impl EventHandler for Handler {
             };
             let uid = user_id.0 as i64;
 
-            let q = sqlx::query!(
-                "SELECT hello,bye,voice_type,generator_type FROM user_config WHERE user_id = ?",
-                uid
-            )
-            .fetch_one(&self.database)
-            .await;
-            let nickname = self
-                .database
-                .get_user_config_or_default(uid)
-                .await
-                .read_nickname
-                .unwrap_or(user_name.to_string());
-            if let Ok(q) = q {
-                let greet_text = match greeting_type {
-                    0 => q.hello,
-                    1 => q.bye,
-                    _ => unreachable!(),
-                };
-
-                let text = format!("{}さん、{}", nickname, greet_text)
-                    .make_read_text(&self.database)
-                    .await;
-                let voice_type = q.voice_type.try_into().unwrap();
-                play_raw_voice(
-                    &ctx,
-                    &text,
-                    voice_type,
-                    q.generator_type.try_into().unwrap(),
-                    guild_id?,
-                )
+            let user_config = self.database.get_user_config_or_default(uid).await;
+            let nickname = user_config.read_nickname.unwrap_or(user_name.to_string());
+            let greet_text = match greeting_type {
+                0 => user_config.hello,
+                1 => user_config.bye,
+                _ => unreachable!(),
+            };
+            let text = format!("{}さん、{}", nickname, greet_text)
+                .make_read_text(&self.database)
                 .await;
-            } else {
-                let greet_text = match greeting_type {
-                    0 => "こんにちは",
-                    1 => "ばいばい",
-                    _ => unreachable!(),
-                };
+            let voice_type = user_config.voice_type.try_into().unwrap();
+            play_raw_voice(
+                &ctx,
+                &text,
+                voice_type,
+                user_config.generator_type.try_into().unwrap(),
+                guild_id?,
+            )
+            .await;
 
-                let text = format!("{}さん、{}", nickname, greet_text)
-                    .make_read_text(&self.database)
-                    .await;
-                play_raw_voice(&ctx, &text, 1, 1, guild_id?).await;
-            }
             Some(())
         }
         .await;

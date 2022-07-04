@@ -41,27 +41,18 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
         content_safe(&ctx.cache, msg.content.clone(), &clean_option).await
     );
     let cleaned = text.make_read_text(&handler.database).await;
-    let q = sqlx::query!(
-        "SELECT voice_type,generator_type FROM user_config WHERE user_id = ?",
-        user_id
+    let user_config = handler.database.get_user_config_or_default(user_id).await;
+
+    let voice_type = user_config.voice_type.try_into().unwrap();
+    let generator_type = user_config.generator_type.try_into().unwrap();
+    create_voice(
+        &cleaned,
+        voice_type,
+        generator_type,
+        temp_file.as_file_mut(),
     )
-    .fetch_one(&handler.database)
     .await;
-    let (_, generator_type) = if let Ok(q) = q {
-        let voice_type = q.voice_type.try_into().unwrap();
-        let generator_type = q.generator_type.try_into().unwrap();
-        create_voice(
-            &cleaned,
-            voice_type,
-            generator_type,
-            temp_file.as_file_mut(),
-        )
-        .await;
-        (voice_type, generator_type)
-    } else {
-        create_voice(&cleaned, 1, 1, temp_file.as_file_mut()).await;
-        (1, 0)
-    };
+
     let guild = msg.guild(&ctx.cache).await.unwrap();
     let guild_id = guild.id;
     let (_, path) = temp_file.keep().unwrap();
@@ -78,7 +69,6 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
             track.set_volume(0.4);
         }
         handler.enqueue(track);
-        //handler.enqueue_source(source.into());
     }
 }
 

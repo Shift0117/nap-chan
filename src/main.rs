@@ -1,30 +1,15 @@
 mod commands;
 mod handler;
 mod lib;
-use commands::meta;
 use dotenv::dotenv;
-use lib::db::{DictDB, UserConfigDB};
-use lib::text::TextMessage;
-use lib::voice::*;
 use serenity::client::{ClientBuilder, Context};
 use serenity::framework::standard::macros::{command, group};
 use serenity::framework::standard::CommandResult;
 use serenity::http::Http;
-use serenity::model::id::{GuildId, UserId};
-use serenity::model::interactions::application_command::ApplicationCommandInteraction;
-use serenity::model::interactions::{application_command, Interaction, InteractionResponseType};
-use serenity::model::prelude::VoiceState;
-use serenity::{
-    async_trait,
-    client::EventHandler,
-    framework::StandardFramework,
-    model::{channel::Message, gateway::Ready},
-};
+use serenity::model::id::GuildId;
+use serenity::{async_trait, framework::StandardFramework, model::channel::Message};
 use songbird::{Event, EventContext, SerenityInit};
-use sqlx::{query, query_as};
-use std::collections::{HashMap, HashSet};
-use std::convert::TryInto;
-use std::fs::{File, OpenOptions};
+use std::collections::HashSet;
 use std::io::{self, Seek, Write};
 use std::path::Path;
 use std::sync::Arc;
