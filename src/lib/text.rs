@@ -41,25 +41,22 @@ impl TextMessage for String {
             if let Some(english_match) = c.get(0) {
                 let english = english_match.as_str();
                 let result = ALKANA.get_katakana(english);
+                let mut temp = english.to_string();
                 if let Some(result) = result {
-                    text = text.replacen(english, &result, 1);
+                    temp = result;
                 } else {
                     let katakana = to_katakana(english);
                     if is_katakana(&katakana) {
-                        text = text.replace(english, &katakana);
+                        temp = katakana;
                     } else {
-                        let n = english.len();
-                        for i in 1..n {
-                            let (first, last) = english.split_at(i);
-                            if let (Some(first_res), Some(last_res)) =
-                                (ALKANA.get_katakana(first), ALKANA.get_katakana(last))
-                            {
-                                text = text.replacen(first, &first_res, 1);
-                                text = text.replacen(last, &last_res, 1);
+                        if let Some(words) = min_split(english) {
+                            for word in words.iter() {
+                                temp = temp.replacen(word, &ALKANA.get_katakana(&word).unwrap(), 1);
                             }
                         }
                     }
                 }
+                text = text.replacen(english, &temp, 1);
             }
         }
         text
@@ -109,5 +106,56 @@ fn alkana_speed_test() {
     for _ in 0..1000000 {
         ALKANA.get_katakana(word).unwrap();
     }
-    println!("{}",now.elapsed().as_millis());
+    println!("{}", now.elapsed().as_millis());
+}
+
+// 次の条件 (*) を満たすような str の分割 str = S_1 + S_2 + ... + S_k であって、k が最小であるものを求める
+// (*) S_1,S_2,...,S_k はすべて alkana で変換可能
+fn min_split(str: &str) -> Option<Vec<String>> {
+    let str = str.chars().collect::<Vec<_>>();
+    let n = str.len();
+    let mut table = vec![vec![false; n]; n];
+    // table[i][j] := str[i..=j] が変換可能かどうか
+    let mut dp: Vec<usize> = vec![n + 1; n + 1];
+    dp[0] = 0;
+    // dp[i] := S[0..i] に対しての問題の結果
+    // dp[i] = min_{0 <= j < i,table[j..i] = true}{dp[j]} + 1
+    for i in 0..n {
+        for j in i + 1..n {
+            table[i][j] = ALKANA
+                .get_katakana(&str[i..=j].iter().collect::<String>())
+                .is_some();
+        }
+    }
+    for i in 1..=n {
+        dp[i] = (0..i)
+            .filter(|j| table[*j][i - 1])
+            .map(|j| dp[j])
+            .min()
+            .unwrap_or(n)
+            + 1;
+    }
+    let k = dp[n];
+    if k > n {
+        None
+    } else {
+        let mut ans = Vec::new();
+        let mut cur = k;
+        let mut prev_idx = n;
+        for i in (0..n).rev() {
+            if dp[i] + 1 == cur {
+                ans.push(str[i..prev_idx].iter().collect::<String>());
+                prev_idx = i;
+                cur -= 1;
+            }
+        }
+        ans.reverse();
+        Some(ans)
+    }
+}
+
+#[test]
+fn min_split_test() {
+    let str = "firefoxfoxfoxoxford";
+    assert_eq!(min_split(str),Some(vec!["fire".to_string(),"fox".to_string(),"fox".to_string(),"fox".to_string(),"oxford".to_string()]));
 }
