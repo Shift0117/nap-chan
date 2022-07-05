@@ -39,6 +39,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "alkana-rs"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "615e2d6f95cefdf0096ea39e0f128fd1d57340ccb1eda902cbe9d3acede69e43"
+dependencies = [
+ "once_cell",
+]
+
+[[package]]
 name = "ansi_term"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -362,6 +371,7 @@ dependencies = [
 name = "discord-bot-rust"
 version = "0.1.0"
 dependencies = [
+ "alkana-rs",
  "anyhow",
  "dotenv",
  "rand 0.8.5",
@@ -1070,9 +1080,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.12.0"
+version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7709cef83f0c1f58f666e746a08b21e0085f7440fa6a29cc194d68aac97a4225"
+checksum = "18a6dbe30758c9f83eb00cbea4ac95966305f5a7772f3f42ebfc7fc7eddbd8e1"
 
 [[package]]
 name = "opaque-debug"

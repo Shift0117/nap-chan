@@ -1,13 +1,10 @@
-use std::{
-    io::Read,
-    process::{Command, Stdio},
-};
-
 use regex;
 use serenity::async_trait;
 
 use super::db::DictDB;
+use alkana_rs::ALKANA;
 use wana_kana::{is_katakana::is_katakana, to_katakana::to_katakana};
+
 #[async_trait]
 pub trait TextMessage {
     fn replace_url(&self) -> Self;
@@ -43,10 +40,9 @@ impl TextMessage for String {
         for c in re.captures_iter(self) {
             if let Some(english_match) = c.get(0) {
                 let english = english_match.as_str();
-                let result = alkana(english);
-                // alkana で変換できたとき
+                let result = ALKANA.get_katakana(english);
                 if let Some(result) = result {
-                    text = text.replacen(english, &result,1);
+                    text = text.replacen(english, &result, 1);
                 } else {
                     let katakana = to_katakana(english);
                     if is_katakana(&katakana) {
@@ -54,12 +50,12 @@ impl TextMessage for String {
                     } else {
                         let n = english.len();
                         for i in 1..n {
-                            // firewall -> fire wall のように単語の区切りを探す
-                            // 3つ以上でも区切りたいが計算量がすごくなってしまいそう
                             let (first, last) = english.split_at(i);
-                            if let (Some(first_res),Some(last_res)) = (alkana(first),alkana(last)) {
+                            if let (Some(first_res), Some(last_res)) =
+                                (ALKANA.get_katakana(first), ALKANA.get_katakana(last))
+                            {
                                 text = text.replacen(first, &first_res, 1);
-                                text = text.replacen(last,&last_res,1);
+                                text = text.replacen(last, &last_res, 1);
                             }
                         }
                     }
@@ -82,45 +78,36 @@ impl TextMessage for String {
     }
 }
 
-fn alkana(word: &str) -> Option<String> {
-    let res = Command::new("alkana")
-        .arg(word)
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("alkana command failed to start");
-    let mut out = res.stdout.unwrap();
-    let mut buf = String::new();
-    out.read_to_string(&mut buf).ok();
-    if buf.ends_with('\n') {
-        buf.pop();
-        if buf.ends_with('\r') {
-            buf.pop();
-        }
-    }
-    if buf.is_empty() {
-        None
-    } else {
-        Some(buf)
-    }
-}
-
 #[test]
 fn hiraganize_test() {
     let word = "hello".to_string();
     assert_eq!("ハロー".to_string(), word.hiraganize());
 
     let sentence = "hello world".to_string();
-    assert_eq!("ハロー ワールド".to_string(), sentence.hiraganize());
+    assert_eq!("ハロー ワールドゥ".to_string(), sentence.hiraganize());
 
     let hiragana = "はろーわーるど".to_string();
     assert_eq!("はろーわーるど".to_string(), hiragana.hiraganize());
 
     let mixed = "hello てすと world".to_string();
-    assert_eq!("ハロー てすと ワールド".to_string(), mixed.hiraganize());
+    assert_eq!("ハロー てすと ワールドゥ".to_string(), mixed.hiraganize());
 
     let romaji = "honyaraka".to_string();
     assert_eq!("ホニャラカ", romaji.hiraganize());
 
     let unknown = "sfhsakhba".to_string();
     assert_eq!(unknown, unknown.hiraganize());
+
+    let jukugo = "firefox".to_string(); // fire,fox は辞書にあるが firefox はない
+    assert_eq!("ファイアーフォックス", jukugo.hiraganize());
+}
+
+#[test]
+fn alkana_speed_test() {
+    let word = "hello";
+    let now = std::time::Instant::now();
+    for _ in 0..1000000 {
+        ALKANA.get_katakana(word).unwrap();
+    }
+    println!("{}",now.elapsed().as_millis());
 }
