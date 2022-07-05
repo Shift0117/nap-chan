@@ -143,7 +143,7 @@ fn min_split(str: &str) -> Option<Vec<String>> {
         let mut cur = k;
         let mut prev_idx = n;
         for i in (0..n).rev() {
-            if dp[i] + 1 == cur {
+            if dp[i] + 1 == cur && table[i][prev_idx-1] {
                 ans.push(str[i..prev_idx].iter().collect::<String>());
                 prev_idx = i;
                 cur -= 1;
@@ -158,4 +158,10 @@ fn min_split(str: &str) -> Option<Vec<String>> {
 fn min_split_test() {
     let str = "firefoxfoxfoxoxford";
     assert_eq!(min_split(str),Some(vec!["fire".to_string(),"fox".to_string(),"fox".to_string(),"fox".to_string(),"oxford".to_string()]));
+
+    let unknown = "fssjkfsahfkajsh";
+    assert_eq!(min_split(unknown),None);
+
+    let str = "flightsimulator";
+    dbg!(min_split(str));
 }
