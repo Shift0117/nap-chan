@@ -40,7 +40,6 @@ pub struct Handler {
 }
 type Command = ApplicationCommandInteraction;
 type ArgumentValue = ApplicationCommandInteractionDataOptionValue;
-pub type SlashCommandResult = Result<(String,bool)>;
 fn get_argument(command: &Command, index: usize) -> Result<&ArgumentValue> {
     command
         .data
@@ -52,46 +51,46 @@ fn get_argument(command: &Command, index: usize) -> Result<&ArgumentValue> {
         .ok_or(anyhow!("could not parse"))
 }
 impl Handler {
-    pub async fn hello(&self, command: &Command, greet: &str) -> SlashCommandResult {
+    pub async fn hello(&self, command: &Command, greet: &str) -> Result<String> {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
         let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.hello = greet.to_string();
         self.database.update_user_config(&user_config).await;
-        Ok((format!(
+        Ok(format!(
             "{}さん、これから{}ってあいさつするね",
             command.member.as_ref().unwrap().user.name,
             greet
-        ),false))
+        ))
     }
-    pub async fn bye(&self, command: &Command, greet: &str) -> SlashCommandResult {
+    pub async fn bye(&self, command: &Command, greet: &str) -> Result<String> {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
         let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.bye = greet.to_string();
         self.database.update_user_config(&user_config).await;
-        Ok((format!(
+        Ok(format!(
             "{}さん、これから{}ってあいさつするね",
             command.member.as_ref().unwrap().user.name,
             greet
-        ),false))
+        ))
     }
-    pub async fn set_voice_type(&self, command: &Command, voice_type: i64) -> SlashCommandResult {
+    pub async fn set_voice_type(&self, command: &Command, voice_type: i64) -> Result<String> {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
         let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.voice_type = voice_type;
         self.database.update_user_config(&user_config).await;
-        Ok((format!("ボイスタイプを {} に変えたよ", voice_type).to_string(),false))
+        Ok(format!("ボイスタイプを {} に変えたよ", voice_type).to_string())
     }
 
     pub async fn set_generator_type(
         &self,
         command: &Command,
         generator_type: i64,
-    ) -> SlashCommandResult {
+    ) -> Result<String> {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
         let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.generator_type = generator_type;
         self.database.update_user_config(&user_config).await;
-        Ok((format!(
+        Ok(format!(
             "{}に変えたよ",
             match generator_type {
                 0 => "COEIROINK",
@@ -99,37 +98,37 @@ impl Handler {
                 _ => unreachable!(),
             }
         )
-        .to_string(),false))
+        .to_string())
     }
-    pub async fn add(&self, before: &str, after: &str) -> SlashCommandResult {
+    pub async fn add(&self, before: &str, after: &str) -> Result<String> {
         let dict = Dict {
             word: before.to_string(),
             read_word: after.to_string(),
         };
         self.database.update_dict(&dict).await;
-        Ok((format!("これからは、{} を {} って読むね", before, after),false))
+        Ok(format!("これからは、{} を {} って読むね", before, after))
     }
-    pub async fn rem(&self, word: &str) -> SlashCommandResult {
+    pub async fn rem(&self, word: &str) -> Result<String> {
         if let Ok(_) = self.database.remove(word).await {
-            Ok((format!("これからは {} って読むね", word),false))
+            Ok(format!("これからは {} って読むね", word))
         } else {
             Err(anyhow!("その単語は登録されてないよ！"))
         }
     }
-    pub async fn set_nickname(&self, command: &Command, nickname: &str) -> SlashCommandResult {
+    pub async fn set_nickname(&self, command: &Command, nickname: &str) -> Result<String> {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
         let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.read_nickname = Some(nickname.to_string());
         tracing::info!("{:?}", user_config);
         self.database.update_user_config(&user_config).await;
-        Ok((format!(
+        Ok(format!(
             "{}さん、これからは{}って呼ぶね",
             command.member.as_ref().unwrap().user.name,
             nickname.to_string()
         )
-        .to_string(),false))
+        .to_string())
     }
-    pub async fn rand_member(&self, command: &Command, ctx: &Context) -> SlashCommandResult {
+    pub async fn rand_member(&self, command: &Command, ctx: &Context) -> Result<String> {
         let guild_id = command.guild_id.ok_or(anyhow!("guild does not exist"))?;
         let guild = ctx
             .cache
@@ -146,10 +145,10 @@ impl Handler {
             .member(guild_id, user_id)
             .await
             .ok_or(anyhow!("member not found"))?;
-        Ok((format!(
+        Ok(format!(
             "でけでけでけでけ・・・でん！{}",
             member.nick.as_ref().unwrap_or(&member.user.name)
-        ),true))
+        ))
     }
 
     pub async fn interaction_create_with_result(
@@ -159,7 +158,7 @@ impl Handler {
         command_name: &str,
         voice_type: &mut i64,
         generator_type: &mut i64,
-    ) -> SlashCommandResult {
+    ) -> Result<String> {
         match command_name {
             "join" => meta::join(&ctx, &command, &self.read_channel_id).await,
             "leave" => meta::leave(&ctx, command.guild_id.unwrap()).await,
@@ -206,7 +205,7 @@ impl Handler {
                 let voice_type_args = get_argument(command, 0)?;
                 if let ArgumentValue::Integer(voice_type_args) = voice_type_args {
                     *voice_type = *voice_type_args;
-                    Ok((format!("タイプ{}はこんな感じだよ", voice_type_args),false))
+                    Ok(format!("タイプ{}はこんな感じだよ", voice_type_args))
                 } else {
                     unreachable!()
                 }
@@ -242,10 +241,7 @@ impl Handler {
             "walpha" => {
                 let input = get_argument(command, 0)?;
                 if let ArgumentValue::String(input) = input {
-                    let result = others::simple_wolfram_alpha(input).await;
-                    result.and_then(|result| {
-                        Ok((format!("input:{},output:{}",input,result),true))
-                    })
+                    Ok(format!("{} を計算するよ！", input))
                 } else {
                     unreachable!()
                 }
@@ -420,7 +416,6 @@ impl EventHandler for Handler {
     }
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(command) = interaction {
-            println!("Received command interaction: {:#?}", command);
             let mut voice_type = 1;
             let mut generator_type = 0;
             let content = self
@@ -432,36 +427,49 @@ impl EventHandler for Handler {
                     &mut generator_type,
                 )
                 .await;
-
             if let Err(why) = command
                 .create_interaction_response(&ctx.http, |response| {
                     response
                         .kind(InteractionResponseType::ChannelMessageWithSource)
                         .interaction_response_data(|message| {
                             message.content(match content.as_ref() {
-                                Ok((content,_)) => content.clone(),
+                                Ok(content) => content.clone(),
                                 Err(error) => format!("エラー: {}", error).to_string(),
-                            }) //.add_embed(embed)
+                            })
                         })
                 })
                 .await
             {
                 println!("Cannot respond to slash command: {}", why);
             } else {
-                if let Ok((content,clean_flag)) = content {
-                    let mut content = content;
-                    if clean_flag {
-                        content = content.make_read_text(&self.database).await;
+                let command_name = command.data.name.as_str();
+                match command_name {
+                    "walpha" => {
+                        let input = get_argument(&command, 0).unwrap();
+                        if let ArgumentValue::String(input) = input {
+                            if let Ok(img_url) = others::simple_wolfram_alpha(input).await {
+                                command
+                                    .channel_id
+                                    .send_message(&ctx.http, |m| m.add_embed(|x| x.image(img_url)))
+                                    .await
+                                    .ok();
+                            };
+                        } else {
+                            ()
+                        }
                     }
-                    play_raw_voice(
-                        &ctx,
-                        &content,
-                        voice_type.try_into().unwrap(),
-                        generator_type.try_into().unwrap(),
-                        command.guild_id.unwrap(),
-                    )
-                    .await;
+                    _ => (),
                 }
+            }
+            if let Ok(content) = content {
+                play_raw_voice(
+                    &ctx,
+                    &content,
+                    voice_type.try_into().unwrap(),
+                    generator_type.try_into().unwrap(),
+                    command.guild_id.unwrap(),
+                )
+                .await;
             }
         }
     }

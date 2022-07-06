@@ -27,7 +27,6 @@ impl TextMessage for String {
     async fn replace_by_dict(&self, database: &sqlx::SqlitePool) -> Self {
         let mut text = self.clone();
         for w in database.get_dict_all().await {
-            tracing::info!("{:?} {:?}", &w, &text);
             let before = &w.word;
             let after = &w.read_word;
             text = text.replace(before, after);
@@ -50,7 +49,6 @@ impl TextMessage for String {
                         temp = katakana;
                     } else {
                         if let Some(words) = min_split(english) {
-                            tracing::info!("{:?}", &words);
                             for word in words.iter() {
                                 temp = temp.replacen(word, &ALKANA.get_katakana(&word).unwrap(), 1);
                             }
