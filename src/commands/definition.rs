@@ -140,6 +140,18 @@ pub async fn set_application_commands(
                     .name("rand_member")
                     .description("VC内の人をランダムに選びます")
             })
+            .create_application_command(|command| {
+                command
+                    .name("walpha")
+                    .description("計算などをしてくれます")
+                    .create_option(|option| {
+                        option
+                            .kind(application_command::ApplicationCommandOptionType::String)
+                            .required(true)
+                            .name("input")
+                            .description("string")
+                    })
+            })
     })
     .await
     .map_err(|e| e.into())

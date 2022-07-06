@@ -24,7 +24,7 @@ use std::{
 use tokio::sync::Mutex;
 
 use crate::{
-    commands::{definition, meta},
+    commands::{definition, meta, others},
     lib::{
         db::{DictDB, UserConfigDB},
         text::TextMessage,
@@ -40,6 +40,7 @@ pub struct Handler {
 }
 type Command = ApplicationCommandInteraction;
 type ArgumentValue = ApplicationCommandInteractionDataOptionValue;
+pub type SlashCommandResult = Result<(String,bool)>;
 fn get_argument(command: &Command, index: usize) -> Result<&ArgumentValue> {
     command
         .data
@@ -51,46 +52,46 @@ fn get_argument(command: &Command, index: usize) -> Result<&ArgumentValue> {
         .ok_or(anyhow!("could not parse"))
 }
 impl Handler {
-    pub async fn hello(&self, command: &Command, greet: &str) -> Result<String> {
+    pub async fn hello(&self, command: &Command, greet: &str) -> SlashCommandResult {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
         let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.hello = greet.to_string();
         self.database.update_user_config(&user_config).await;
-        Ok(format!(
+        Ok((format!(
             "{}さん、これから{}ってあいさつするね",
             command.member.as_ref().unwrap().user.name,
             greet
-        ))
+        ),false))
     }
-    pub async fn bye(&self, command: &Command, greet: &str) -> Result<String> {
+    pub async fn bye(&self, command: &Command, greet: &str) -> SlashCommandResult {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
         let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.bye = greet.to_string();
         self.database.update_user_config(&user_config).await;
-        Ok(format!(
+        Ok((format!(
             "{}さん、これから{}ってあいさつするね",
             command.member.as_ref().unwrap().user.name,
             greet
-        ))
+        ),false))
     }
-    pub async fn set_voice_type(&self, command: &Command, voice_type: i64) -> Result<String> {
+    pub async fn set_voice_type(&self, command: &Command, voice_type: i64) -> SlashCommandResult {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
         let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.voice_type = voice_type;
         self.database.update_user_config(&user_config).await;
-        Ok(format!("ボイスタイプを {} に変えたよ", voice_type).to_string())
+        Ok((format!("ボイスタイプを {} に変えたよ", voice_type).to_string(),false))
     }
 
     pub async fn set_generator_type(
         &self,
         command: &Command,
         generator_type: i64,
-    ) -> Result<String> {
+    ) -> SlashCommandResult {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
         let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.generator_type = generator_type;
         self.database.update_user_config(&user_config).await;
-        Ok(format!(
+        Ok((format!(
             "{}に変えたよ",
             match generator_type {
                 0 => "COEIROINK",
@@ -98,37 +99,37 @@ impl Handler {
                 _ => unreachable!(),
             }
         )
-        .to_string())
+        .to_string(),false))
     }
-    pub async fn add(&self, before: &str, after: &str) -> Result<String> {
+    pub async fn add(&self, before: &str, after: &str) -> SlashCommandResult {
         let dict = Dict {
             word: before.to_string(),
             read_word: after.to_string(),
         };
         self.database.update_dict(&dict).await;
-        Ok(format!("これからは、{} を {} って読むね", before, after))
+        Ok((format!("これからは、{} を {} って読むね", before, after),false))
     }
-    pub async fn rem(&self, word: &str) -> Result<String> {
+    pub async fn rem(&self, word: &str) -> SlashCommandResult {
         if let Ok(_) = self.database.remove(word).await {
-            Ok(format!("これからは {} って読むね", word))
+            Ok((format!("これからは {} って読むね", word),false))
         } else {
             Err(anyhow!("その単語は登録されてないよ！"))
         }
     }
-    pub async fn set_nickname(&self, command: &Command, nickname: &str) -> Result<String> {
+    pub async fn set_nickname(&self, command: &Command, nickname: &str) -> SlashCommandResult {
         let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
         let mut user_config = self.database.get_user_config_or_default(user_id).await;
         user_config.read_nickname = Some(nickname.to_string());
         tracing::info!("{:?}", user_config);
         self.database.update_user_config(&user_config).await;
-        Ok(format!(
+        Ok((format!(
             "{}さん、これからは{}って呼ぶね",
             command.member.as_ref().unwrap().user.name,
             nickname.to_string()
         )
-        .to_string())
+        .to_string(),false))
     }
-    pub async fn rand_member(&self, command: &Command, ctx: &Context) -> Result<String> {
+    pub async fn rand_member(&self, command: &Command, ctx: &Context) -> SlashCommandResult {
         let guild_id = command.guild_id.ok_or(anyhow!("guild does not exist"))?;
         let guild = ctx
             .cache
@@ -145,10 +146,10 @@ impl Handler {
             .member(guild_id, user_id)
             .await
             .ok_or(anyhow!("member not found"))?;
-        Ok(format!(
+        Ok((format!(
             "でけでけでけでけ・・・でん！{}",
             member.nick.as_ref().unwrap_or(&member.user.name)
-        ))
+        ),true))
     }
 
     pub async fn interaction_create_with_result(
@@ -158,7 +159,7 @@ impl Handler {
         command_name: &str,
         voice_type: &mut i64,
         generator_type: &mut i64,
-    ) -> Result<String> {
+    ) -> SlashCommandResult {
         match command_name {
             "join" => meta::join(&ctx, &command, &self.read_channel_id).await,
             "leave" => meta::leave(&ctx, command.guild_id.unwrap()).await,
@@ -205,7 +206,7 @@ impl Handler {
                 let voice_type_args = get_argument(command, 0)?;
                 if let ArgumentValue::Integer(voice_type_args) = voice_type_args {
                     *voice_type = *voice_type_args;
-                    Ok(format!("タイプ{}はこんな感じだよ", voice_type_args))
+                    Ok((format!("タイプ{}はこんな感じだよ", voice_type_args),false))
                 } else {
                     unreachable!()
                 }
@@ -232,12 +233,23 @@ impl Handler {
             "set_nickname" => {
                 let nickname = get_argument(command, 0)?;
                 if let ArgumentValue::String(nickname) = nickname {
-                    self.set_nickname(command, &nickname).await
+                    self.set_nickname(command, nickname).await
                 } else {
                     unreachable!()
                 }
             }
             "rand_member" => self.rand_member(&command, &ctx).await,
+            "walpha" => {
+                let input = get_argument(command, 0)?;
+                if let ArgumentValue::String(input) = input {
+                    let result = others::simple_wolfram_alpha(input).await;
+                    result.and_then(|result| {
+                        Ok((format!("input:{},output:{}",input,result),true))
+                    })
+                } else {
+                    unreachable!()
+                }
+            }
             _ => Err(anyhow!("未実装だよ！")),
         }
     }
@@ -384,7 +396,6 @@ impl EventHandler for Handler {
             .get(&msg.author.id)
             .and_then(|voice_states| voice_states.channel_id);
         let text_channel_id = msg.channel_id;
-        let uid = msg.author.id.0 as i64;
         let read_channel_id = self.read_channel_id.lock().await.clone();
         if read_channel_id == Some(text_channel_id) {
             if let Some(voice_channel_id) = voice_channel_id {
@@ -402,7 +413,6 @@ impl EventHandler for Handler {
                     .map(|member| member.user.id)
                     .collect::<Vec<_>>();
                 if members.contains(&nako_id) && msg.author.id != nako_id {
-                    dbg!(&msg);
                     play_voice(&ctx, msg, self).await;
                 };
             }
@@ -429,16 +439,20 @@ impl EventHandler for Handler {
                         .kind(InteractionResponseType::ChannelMessageWithSource)
                         .interaction_response_data(|message| {
                             message.content(match content.as_ref() {
-                                Ok(content) => content.clone(),
+                                Ok((content,_)) => content.clone(),
                                 Err(error) => format!("エラー: {}", error).to_string(),
-                            })
+                            }) //.add_embed(embed)
                         })
                 })
                 .await
             {
                 println!("Cannot respond to slash command: {}", why);
             } else {
-                if let Ok(content) = content {
+                if let Ok((content,clean_flag)) = content {
+                    let mut content = content;
+                    if clean_flag {
+                        content = content.make_read_text(&self.database).await;
+                    }
                     play_raw_voice(
                         &ctx,
                         &content,

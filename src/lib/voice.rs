@@ -89,7 +89,7 @@ pub async fn create_voice(text: &str, voice_type: u8, generator_type: u8, temp_f
         .send()
         .await
         .expect("Panic in audio query");
-    println!("{}", res.status());
+    //println!("{}", res.status());
     let synthesis_body = res.text().await.expect("Panic in get body");
     let synthesis_arg = [("speaker", voice_type)];
     let synthesis_url = format!("{}/synthesis", base_url);
@@ -100,7 +100,7 @@ pub async fn create_voice(text: &str, voice_type: u8, generator_type: u8, temp_f
         .send()
         .await
         .expect("Panic in synthesis query");
-    dbg!(&synthesis_res.status());
+    //dbg!(&synthesis_res.status());
     temp_file
         .write(&synthesis_res.bytes().await.unwrap())
         .unwrap();
