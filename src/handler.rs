@@ -447,15 +447,14 @@ impl EventHandler for Handler {
                     "walpha" => {
                         let input = get_argument(&command, 0).unwrap();
                         if let ArgumentValue::String(input) = input {
-                            if let Ok(img_url) = others::simple_wolfram_alpha(input).await {
-                                command
+                            if let Ok(file_path) = others::simple_wolfram_alpha(input).await {
+                                let _ = command
                                     .channel_id
-                                    .send_message(&ctx.http, |m| m.add_embed(|x| x.image(img_url)))
-                                    .await
-                                    .ok();
+                                    .send_files(&ctx.http, vec![file_path.as_str()], |m| {
+                                        m.content("")
+                                    })
+                                    .await;
                             };
-                        } else {
-                            ()
                         }
                     }
                     _ => (),
@@ -471,6 +470,8 @@ impl EventHandler for Handler {
                 )
                 .await;
             }
+        } else if let Interaction::MessageComponent(msg) = interaction {
+            
         }
     }
 }

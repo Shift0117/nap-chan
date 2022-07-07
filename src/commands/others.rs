@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use std::{
     fmt::Debug,
     fs::File,
-    io::{Cursor, Write},
+    io::{Cursor, Write}, str::Bytes,
 };
 
 pub async fn simple_wolfram_alpha(input: &str) -> Result<String> {
@@ -13,5 +13,9 @@ pub async fn simple_wolfram_alpha(input: &str) -> Result<String> {
     let params = [("i", input), ("appid", &app_id)];
     let client = reqwest::Client::new();
     let res = client.get(url).query(&params).send().await?;
-    Ok(res.url().to_string())
+    let now = std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH)?.as_nanos().to_string();
+    let path = format!("temp/{}.gif",now);
+    let mut file = std::fs::File::create(&path)?;
+    file.write(&res.bytes().await?);
+    Ok(path)
 }
