@@ -12,6 +12,8 @@ use crate::handler::Handler;
 
 use super::{db::UserConfigDB, text::TextMessage};
 
+enum VoiceType {}
+
 pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
     let mut temp_file = tempfile::Builder::new().tempfile_in("temp").unwrap();
     let clean_option = ContentSafeOptions::new();

@@ -1,6 +1,8 @@
 use anyhow::{anyhow, Result};
+use serde::Deserialize;
 use serenity::{
     async_trait,
+    builder::{CreateActionRow, CreateComponents},
     client::{Context, EventHandler},
     model::{
         channel::Message,
@@ -9,6 +11,7 @@ use serenity::{
             application_command::{
                 self, ApplicationCommandInteraction, ApplicationCommandInteractionDataOptionValue,
             },
+            message_component::ComponentType,
             Interaction, InteractionResponseType,
         },
         prelude::{Ready, VoiceState},
@@ -22,6 +25,7 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::Mutex;
+use tracing::info;
 
 use crate::{
     commands::{definition, meta, others},
@@ -33,6 +37,24 @@ use crate::{
     Dict,
 };
 pub const GUILD_IDS_PATH: &str = "guilds.json";
+#[derive(Deserialize, Clone)]
+struct Style {
+    name: String,
+    id: u8,
+}
+#[derive(Deserialize, Clone)]
+struct Speaker {
+    name: String,
+    speaker_uuid: String,
+    styles: Vec<Style>,
+    version: String,
+}
+
+#[derive(Clone, Copy)]
+enum Generators {
+    COEIROINK = 0,
+    VOICEVOX = 1,
+}
 
 pub struct Handler {
     pub database: sqlx::SqlitePool,
@@ -73,33 +95,7 @@ impl Handler {
             greet
         ))
     }
-    pub async fn set_voice_type(&self, command: &Command, voice_type: i64) -> Result<String> {
-        let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
-        let mut user_config = self.database.get_user_config_or_default(user_id).await;
-        user_config.voice_type = voice_type;
-        self.database.update_user_config(&user_config).await;
-        Ok(format!("ボイスタイプを {} に変えたよ", voice_type).to_string())
-    }
 
-    pub async fn set_generator_type(
-        &self,
-        command: &Command,
-        generator_type: i64,
-    ) -> Result<String> {
-        let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
-        let mut user_config = self.database.get_user_config_or_default(user_id).await;
-        user_config.generator_type = generator_type;
-        self.database.update_user_config(&user_config).await;
-        Ok(format!(
-            "{}に変えたよ",
-            match generator_type {
-                0 => "COEIROINK",
-                1 => "VOICEVOX",
-                _ => unreachable!(),
-            }
-        )
-        .to_string())
-    }
     pub async fn add(&self, before: &str, after: &str) -> Result<String> {
         let dict = Dict {
             word: before.to_string(),
@@ -169,7 +165,6 @@ impl Handler {
                     (before, after)
                 {
                     self.add(before, after).await
-                    //self.database.update_dict(&Dict { word: before.to_string(), read_word: after }).await
                 } else {
                     unreachable!()
                 }
@@ -201,33 +196,9 @@ impl Handler {
                     unreachable!()
                 }
             }
-            "play_sample_voice" => {
-                let voice_type_args = get_argument(command, 0)?;
-                if let ArgumentValue::Integer(voice_type_args) = voice_type_args {
-                    *voice_type = *voice_type_args;
-                    Ok(format!("タイプ{}はこんな感じだよ", voice_type_args))
-                } else {
-                    unreachable!()
-                }
-            }
+
             "set_voice_type" => {
-                let voice_type_args = get_argument(command, 0)?;
-                if let ArgumentValue::Integer(voice_type_args) = voice_type_args {
-                    *voice_type = *voice_type_args;
-                    self.set_voice_type(&command, *voice_type_args).await
-                } else {
-                    unreachable!()
-                }
-            }
-            "set_generator_type" => {
-                let generator_type_args = get_argument(command, 0)?;
-                if let ArgumentValue::Integer(generator_type_args) = generator_type_args {
-                    *generator_type = *generator_type_args;
-                    self.set_generator_type(&command, *generator_type_args)
-                        .await
-                } else {
-                    unreachable!()
-                }
+                todo!()
             }
             "set_nickname" => {
                 let nickname = get_argument(command, 0)?;
@@ -416,6 +387,82 @@ impl EventHandler for Handler {
     }
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(command) = interaction {
+            match command.data.name.as_str() {
+                "set_voice_type" => {
+                    let voicevox_file = File::open("speakers/voicevox.json").unwrap();
+                    let reader = std::io::BufReader::new(voicevox_file);
+                    let voicevox_voice_types =
+                        serde_json::from_reader::<_, Vec<Speaker>>(reader).unwrap();
+
+                    let coeiro_file = File::open("speakers/coeiro.json").unwrap();
+                    let reader = std::io::BufReader::new(coeiro_file);
+                    let coeiro_voice_types =
+                        serde_json::from_reader::<_, Vec<Speaker>>(reader).unwrap();
+
+                    command
+                        .create_interaction_response(&ctx.http, |response| {
+                            response
+                                .kind(InteractionResponseType::ChannelMessageWithSource)
+                                .interaction_response_data(|m| {
+                                    m.components(|c| {
+                                        c.create_action_row(|r| {
+                                            r.create_select_menu(|m| {
+                                                m.options(|os| {
+                                                    for speaker in voicevox_voice_types {
+                                                        let name = speaker.name;
+                                                        for style in speaker.styles {
+                                                            os.create_option(|o| {
+                                                                o.label(format!(
+                                                                    "{} {}",
+                                                                    name, style.name
+                                                                ))
+                                                                .value(format!(
+                                                                    "{} {}",
+                                                                    Generators::VOICEVOX as isize,
+                                                                    style.id.to_string()
+                                                                ))
+                                                            });
+                                                        }
+                                                    }
+                                                    os
+                                                })
+                                                .custom_id("0")
+                                            })
+                                        })
+                                        .create_action_row(|r| {
+                                            r.create_select_menu(|m| {
+                                                m.options(|os| {
+                                                    for speaker in coeiro_voice_types {
+                                                        let name = speaker.name;
+                                                        for style in speaker.styles {
+                                                            os.create_option(|o| {
+                                                                o.label(format!(
+                                                                    "{} {}",
+                                                                    name, style.name
+                                                                ))
+                                                                .value(format!(
+                                                                    "{} {}",
+                                                                    Generators::COEIROINK as isize,
+                                                                    style.id.to_string()
+                                                                ))
+                                                            });
+                                                        }
+                                                    }
+                                                    os
+                                                })
+                                                .custom_id("1")
+                                            })
+                                        })
+                                    })
+                                })
+                        })
+                        .await
+                        .ok();
+                    return;
+                }
+                _ => (),
+            };
+
             let mut voice_type = 1;
             let mut generator_type = 0;
             let content = self
@@ -464,14 +511,34 @@ impl EventHandler for Handler {
                 play_raw_voice(
                     &ctx,
                     &content,
-                    voice_type.try_into().unwrap(),
-                    generator_type.try_into().unwrap(),
+                    voice_type as u8,
+                    generator_type as u8,
                     command.guild_id.unwrap(),
                 )
                 .await;
             }
         } else if let Interaction::MessageComponent(msg) = interaction {
-            
+            if let ComponentType::SelectMenu = msg.data.component_type {
+                info!("{:?}", msg.data.values);
+                let mut itr = msg.data.values[0].split(" ");
+                let generator_type = itr.next().unwrap().parse().unwrap();
+                let id = itr.next().unwrap().parse().unwrap();
+                let user_id = msg.user.id.0;
+                let mut user_config = self
+                    .database
+                    .get_user_config_or_default(user_id as i64)
+                    .await;
+                user_config.generator_type = generator_type;
+
+                user_config.voice_type = id;
+                self.database.update_user_config(&user_config).await;
+                let res = msg
+                    .create_interaction_response(&ctx.http, |res| {
+                        res.kind(InteractionResponseType::UpdateMessage)
+                    })
+                    .await;
+                info!("{:?}", res);
+            }
         }
     }
 }

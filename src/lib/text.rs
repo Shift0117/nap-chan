@@ -169,6 +169,4 @@ fn min_split_test() {
 
     let unknown = "fssjkfsahfkajsh";
     assert_eq!(min_split(unknown), None);
-
-
 }

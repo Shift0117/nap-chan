@@ -99,15 +99,6 @@ pub async fn set_application_commands(
                 command
                     .name("set_voice_type")
                     .description("ボイスタイプを変えます")
-                    .create_option(|option| {
-                        option
-                            .kind(application_command::ApplicationCommandOptionType::Integer)
-                            .max_int_value(5)
-                            .min_int_value(0)
-                            .required(true)
-                            .name("type")
-                            .description("0 から 5 の整数値")
-                    })
             })
             .create_application_command(|command| {
                 command
