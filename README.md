@@ -4,6 +4,7 @@ nakochan https://github.com/niuez/nakochan のような discord の読み上げ 
 ## voicevox(coeiroink)を使った読み上げbot
 
 ### 準備
+-- 注意　現状このままでは動きません
 
 1. COEIROINK の `run.exe` を実行します
 2. .env.sample に従って .env に bot の token,application id,COEIROINK が動いているアドレス(デフォルトはおそらく http://127.0.0.1:50031 )を入力します
