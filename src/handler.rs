@@ -2,7 +2,6 @@ use anyhow::{anyhow, Result};
 use serde::Deserialize;
 use serenity::{
     async_trait,
-    builder::{CreateActionRow, CreateComponents},
     client::{Context, EventHandler},
     model::{
         channel::Message,
@@ -28,13 +27,12 @@ use tokio::sync::Mutex;
 use tracing::info;
 
 use crate::{
-    commands::{definition, meta, util},
+    commands::{definition, interactions::interaction_create_with_text, meta, util},
     lib::{
         db::{DictDB, UserConfigDB},
         text::TextMessage,
         voice::{play_raw_voice, play_voice},
     },
-    Dict,
 };
 pub const GUILD_IDS_PATH: &str = "guilds.json";
 #[derive(Deserialize, Clone)]
@@ -60,19 +58,39 @@ pub struct Handler {
     pub database: sqlx::SqlitePool,
     pub read_channel_id: Arc<Mutex<Option<serenity::model::id::ChannelId>>>,
 }
-type Command = ApplicationCommandInteraction;
-type ArgumentValue = ApplicationCommandInteractionDataOptionValue;
-struct InstantSlashCommandResult {
-    msg: Option<Message>,
-    responce_type: InteractionResponseType,
+pub type Command = ApplicationCommandInteraction;
+pub type ArgumentValue = ApplicationCommandInteractionDataOptionValue;
+#[derive(Clone)]
+pub struct SlashCommandTextResult {
+    msg: String,
+    read: bool,
+    format: bool,
     voice_type: Option<u8>,
     generator_type: Option<u8>,
 }
-enum SlashCommandResult {
-    Delayed,
-    Ins,
+
+impl SlashCommandTextResult {
+    pub fn from_str(str: &str) -> Self {
+        SlashCommandTextResult {
+            msg: str.to_string(),
+            read: true,
+            format: true,
+            voice_type: None,
+            generator_type: None,
+        }
+    }
+    pub fn from_str_and_flags(str: &str, read: bool, format: bool) -> Self {
+        SlashCommandTextResult {
+            msg: str.to_string(),
+            read,
+            format,
+            voice_type: None,
+            generator_type: None,
+        }
+    }
 }
-fn get_argument(command: &Command, index: usize) -> Result<&ArgumentValue> {
+
+pub fn get_argument(command: &Command, index: usize) -> Result<&ArgumentValue> {
     command
         .data
         .options
@@ -82,153 +100,7 @@ fn get_argument(command: &Command, index: usize) -> Result<&ArgumentValue> {
         .as_ref()
         .ok_or(anyhow!("could not parse"))
 }
-impl Handler {
-    pub async fn hello(&self, command: &Command, greet: &str) -> Result<String> {
-        let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
-        let mut user_config = self.database.get_user_config_or_default(user_id).await;
-        user_config.hello = greet.to_string();
-        self.database.update_user_config(&user_config).await;
-        Ok(format!(
-            "{}さん、これから{}ってあいさつするね",
-            command.member.as_ref().unwrap().user.name,
-            greet
-        ))
-    }
-    pub async fn bye(&self, command: &Command, greet: &str) -> Result<String> {
-        let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
-        let mut user_config = self.database.get_user_config_or_default(user_id).await;
-        user_config.bye = greet.to_string();
-        self.database.update_user_config(&user_config).await;
-        Ok(format!(
-            "{}さん、これから{}ってあいさつするね",
-            command.member.as_ref().unwrap().user.name,
-            greet
-        ))
-    }
-
-    pub async fn add(&self, before: &str, after: &str) -> Result<String> {
-        let dict = Dict {
-            word: before.to_string(),
-            read_word: after.to_string(),
-        };
-        self.database.update_dict(&dict).await;
-        Ok(format!("これからは、{} を {} って読むね", before, after))
-    }
-    pub async fn rem(&self, word: &str) -> Result<String> {
-        if let Ok(_) = self.database.remove(word).await {
-            Ok(format!("これからは {} って読むね", word))
-        } else {
-            Err(anyhow!("その単語は登録されてないよ！"))
-        }
-    }
-    pub async fn set_nickname(&self, command: &Command, nickname: &str) -> Result<String> {
-        let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
-        let mut user_config = self.database.get_user_config_or_default(user_id).await;
-        user_config.read_nickname = Some(nickname.to_string());
-        tracing::info!("{:?}", user_config);
-        self.database.update_user_config(&user_config).await;
-        Ok(format!(
-            "{}さん、これからは{}って呼ぶね",
-            command.member.as_ref().unwrap().user.name,
-            nickname.to_string()
-        )
-        .to_string())
-    }
-    pub async fn rand_member(&self, command: &Command, ctx: &Context) -> Result<String> {
-        let guild_id = command.guild_id.ok_or(anyhow!("guild does not exist"))?;
-        let guild = ctx
-            .cache
-            .guild(guild_id)
-            .await
-            .ok_or(anyhow!("guild does not exist"))?;
-        let voice_states = guild.voice_states;
-        let vc_members = voice_states.keys().collect::<Vec<_>>();
-        let len = vc_members.len();
-        let i: usize = rand::random();
-        let user_id = vc_members[i % len];
-        let member = ctx
-            .cache
-            .member(guild_id, user_id)
-            .await
-            .ok_or(anyhow!("member not found"))?;
-        Ok(format!(
-            "でけでけでけでけ・・・でん！{}",
-            member.nick.as_ref().unwrap_or(&member.user.name)
-        ))
-    }
-    //pub async fn interaction_create_with_result2() -> Result<(Option<String>,Option<>)>
-    pub async fn interaction_create_with_result(
-        &self,
-        command: &Command,
-        ctx: &Context,
-        command_name: &str,
-    ) -> Result<String> {
-        match command_name {
-            "join" => meta::join(&ctx, &command, &self.read_channel_id).await,
-            "leave" => meta::leave(&ctx, command.guild_id.unwrap()).await,
-            "add" => {
-                let before = get_argument(command, 0)?;
-                let after = get_argument(command, 1)?;
-                if let (ArgumentValue::String(before), ArgumentValue::String(after)) =
-                    (before, after)
-                {
-                    self.add(before, after).await
-                } else {
-                    unreachable!()
-                }
-            }
-            "rem" => {
-                let word = get_argument(&command, 0).unwrap();
-                if let ArgumentValue::String(word) = word {
-                    self.rem(word).await
-                } else {
-                    unreachable!()
-                }
-            }
-            "mute" => meta::mute(&ctx, &command).await,
-            "unmute" => meta::unmute(&ctx, &command).await,
-            "hello" => {
-                let greet = get_argument(&command, 0)?;
-                if let ArgumentValue::String(greet) = greet {
-                    //dict::hello(&ctx,&command,&greet).await
-                    self.hello(&command, &greet).await
-                } else {
-                    unreachable!()
-                }
-            }
-            "bye" => {
-                let greet = get_argument(command, 0)?;
-                if let ArgumentValue::String(greet) = greet {
-                    self.bye(&command, &greet).await
-                } else {
-                    unreachable!()
-                }
-            }
-
-            "set_voice_type" => {
-                todo!()
-            }
-            "set_nickname" => {
-                let nickname = get_argument(command, 0)?;
-                if let ArgumentValue::String(nickname) = nickname {
-                    self.set_nickname(command, nickname).await
-                } else {
-                    unreachable!()
-                }
-            }
-            "rand_member" => self.rand_member(&command, &ctx).await,
-            "walpha" => {
-                let input = get_argument(command, 0)?;
-                if let ArgumentValue::String(input) = input {
-                    Ok(format!("{} を計算するよ！", input))
-                } else {
-                    unreachable!()
-                }
-            }
-            _ => Err(anyhow!("未実装だよ！")),
-        }
-    }
-}
+impl Handler {}
 
 #[async_trait]
 impl EventHandler for Handler {
@@ -396,6 +268,54 @@ impl EventHandler for Handler {
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(command) = interaction {
             match command.data.name.as_str() {
+                // respond instantly with text
+                "add" | "rem" | "hello" | "bye" | "join" | "leave" | "mute" | "unmute"
+                | "rand_member" | "set_nickname" | "info" => {
+                    let content =
+                        interaction_create_with_text(&self, &command, &ctx, &command.data.name)
+                            .await;
+                    if let Err(why) = command
+                        .create_interaction_response(&ctx.http, |response| {
+                            response
+                                .kind(InteractionResponseType::ChannelMessageWithSource)
+                                .interaction_response_data(|message| {
+                                    message.content(match content.as_ref() {
+                                        Ok(content) => content.msg.clone(),
+                                        Err(error) => error.to_string(),
+                                    })
+                                })
+                        })
+                        .await
+                    {
+                        info!("Cannot respond to slash command: {}", why);
+                    } else if let Ok(content) = content {
+                        if content.read {
+                            let msg = if content.format {
+                                content.msg.make_read_text(&self.database).await
+                            } else {
+                                content.msg
+                            };
+                            let user_id = command.user.id.0;
+                            let user_config = self
+                                .database
+                                .get_user_config_or_default(user_id as i64)
+                                .await;
+                            let voice_type =
+                                content.voice_type.unwrap_or(user_config.voice_type as u8);
+                            let generator_type = content
+                                .generator_type
+                                .unwrap_or(user_config.generator_type as u8);
+                            play_raw_voice(
+                                &ctx,
+                                &msg,
+                                voice_type,
+                                generator_type,
+                                command.guild_id.unwrap(),
+                            )
+                            .await;
+                        }
+                    }
+                }
                 "set_voice_type" => {
                     let voicevox_file = File::open("speakers/voicevox.json").unwrap();
                     let reader = std::io::BufReader::new(voicevox_file);
@@ -411,7 +331,7 @@ impl EventHandler for Handler {
                                 .kind(InteractionResponseType::ChannelMessageWithSource)
                                 .interaction_response_data(|msg| {
                                     msg.components(|c| {
-                                        for (idx, vec) in [coeiro_voice_types,voicevox_voice_types]
+                                        for (idx, vec) in [coeiro_voice_types, voicevox_voice_types]
                                             .iter()
                                             .enumerate()
                                         {
@@ -428,8 +348,7 @@ impl EventHandler for Handler {
                                                                     ))
                                                                     .value(format!(
                                                                         "{} {}",
-                                                                        idx
-                                                                            as isize,
+                                                                        idx as isize,
                                                                         style.id.to_string()
                                                                     ))
                                                                 });
@@ -449,48 +368,29 @@ impl EventHandler for Handler {
                         .ok();
                     return;
                 }
+                "walpha" => {
+                    let input = get_argument(&command, 0).unwrap();
+
+                    if let ArgumentValue::String(input) = input {
+                        let res = command
+                            .create_interaction_response(&ctx.http, |res| {
+                                res.kind(InteractionResponseType::ChannelMessageWithSource)
+                                    .interaction_response_data(|msg| {
+                                        msg.content(format!("{} を計算するよ！", &input))
+                                    })
+                            })
+                            .await
+                            .ok();
+                        if let Ok(file_path) = util::simple_wolfram_alpha(input).await {
+                            let _ = command
+                                .channel_id
+                                .send_files(&ctx.http, vec![file_path.as_str()], |m| m.content(""))
+                                .await;
+                        };
+                    }
+                }
                 _ => (),
             };
-
-            let content = self
-                .interaction_create_with_result(&command, &ctx, &command.data.name)
-                .await;
-            if let Err(why) = command
-                .create_interaction_response(&ctx.http, |response| {
-                    response
-                        .kind(InteractionResponseType::ChannelMessageWithSource)
-                        .interaction_response_data(|message| {
-                            message.content(match content.as_ref() {
-                                Ok(content) => content.clone(),
-                                Err(error) => format!("エラー: {}", error).to_string(),
-                            })
-                        })
-                })
-                .await
-            {
-                println!("Cannot respond to slash command: {}", why);
-            } else {
-                let command_name = command.data.name.as_str();
-                match command_name {
-                    "walpha" => {
-                        let input = get_argument(&command, 0).unwrap();
-                        if let ArgumentValue::String(input) = input {
-                            if let Ok(file_path) = util::simple_wolfram_alpha(input).await {
-                                let _ = command
-                                    .channel_id
-                                    .send_files(&ctx.http, vec![file_path.as_str()], |m| {
-                                        m.content("")
-                                    })
-                                    .await;
-                            };
-                        }
-                    }
-                    _ => (),
-                }
-            }
-            if let Ok(content) = content {
-                play_raw_voice(&ctx, &content, 0, 0, command.guild_id.unwrap()).await;
-            }
         } else if let Interaction::MessageComponent(msg) = interaction {
             if let ComponentType::SelectMenu = msg.data.component_type {
                 info!("{:?}", msg.data.values);

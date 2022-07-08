@@ -115,6 +115,9 @@ pub async fn set_application_commands(
                             .description("string")
                     })
             })
+            .create_application_command(|command| {
+                command.name("info").description("設定を表示します")
+            })
     })
     .await
     .map_err(|e| e.into())

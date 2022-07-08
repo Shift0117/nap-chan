@@ -16,7 +16,7 @@ pub async fn join(
     ctx: &Context,
     command: &ApplicationCommandInteraction,
     read_channel_id: &Arc<Mutex<Option<ChannelId>>>,
-) -> Result<String> {
+) -> Result<()> {
     let guild_id = command.guild_id.unwrap();
     let author_id = command.member.as_ref().unwrap().user.id;
     let text_channel_id = command.channel_id;
@@ -40,10 +40,10 @@ pub async fn join(
     handle.deafen(true).await.unwrap();
     handle.add_global_event(Event::Track(TrackEvent::End), TrackEndNotifier);
     *read_channel_id.lock().await = Some(text_channel_id);
-    Ok("おはよ！".to_string())
+    Ok(())
 }
 
-pub async fn leave(ctx: &Context, guild_id: GuildId) -> Result<String> {
+pub async fn leave(ctx: &Context, guild_id: GuildId) -> Result<()> {
     //let guild_id = command.guild_id.unwrap();
     let manager = songbird::get(&ctx)
         .await
@@ -55,13 +55,13 @@ pub async fn leave(ctx: &Context, guild_id: GuildId) -> Result<String> {
             .remove(guild_id)
             .await
             .map_err(|e| anyhow!("{}", e))?;
-        Ok("ばいばい".to_string())
+        Ok(())
     } else {
         Err(anyhow!("ボイスチャンネルに入ってないよ"))
     }
 }
 
-pub async fn mute(ctx: &Context, command: &ApplicationCommandInteraction) -> Result<String> {
+pub async fn mute(ctx: &Context, command: &ApplicationCommandInteraction) -> Result<()> {
     let guild_id = command.guild_id.unwrap();
     let manager = songbird::get(&ctx)
         .await
@@ -78,12 +78,12 @@ pub async fn mute(ctx: &Context, command: &ApplicationCommandInteraction) -> Res
         if let Err(e) = handler.mute(true).await {
             Err(e.into())
         } else {
-            Ok("ミュートしたよ".to_string())
+            Ok(())
         }
     }
 }
 
-pub async fn unmute(ctx: &Context, command: &ApplicationCommandInteraction) -> Result<String> {
+pub async fn unmute(ctx: &Context, command: &ApplicationCommandInteraction) -> Result<()> {
     let guild_id = command.guild_id.unwrap();
     let manager = songbird::get(&ctx)
         .await
@@ -96,6 +96,6 @@ pub async fn unmute(ctx: &Context, command: &ApplicationCommandInteraction) -> R
     if let Err(e) = handler.mute(false).await {
         Err(e.into())
     } else {
-        Ok("ミュート解除したよ".to_string())
+        Ok(())
     }
 }

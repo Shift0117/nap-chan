@@ -26,6 +26,21 @@ pub struct UserConfig {
     read_nickname: Option<String>,
 }
 
+impl std::fmt::Display for UserConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "hello = {},bye = {},voice = {},read_nickname = {}",
+            self.hello,
+            self.bye,
+            self.voice_type,
+            self.read_nickname
+                .as_ref()
+                .unwrap_or(&"default".to_string())
+        )
+    }
+}
+
 #[derive(Debug)]
 pub struct Dict {
     word: String,
