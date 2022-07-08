@@ -28,7 +28,7 @@ use tokio::sync::Mutex;
 use tracing::info;
 
 use crate::{
-    commands::{definition, meta, others},
+    commands::{definition, meta, util},
     lib::{
         db::{DictDB, UserConfigDB},
         text::TextMessage,
@@ -62,6 +62,16 @@ pub struct Handler {
 }
 type Command = ApplicationCommandInteraction;
 type ArgumentValue = ApplicationCommandInteractionDataOptionValue;
+struct InstantSlashCommandResult {
+    msg: Option<Message>,
+    responce_type: InteractionResponseType,
+    voice_type: Option<u8>,
+    generator_type: Option<u8>,
+}
+enum SlashCommandResult {
+    Delayed,
+    Ins,
+}
 fn get_argument(command: &Command, index: usize) -> Result<&ArgumentValue> {
     command
         .data
@@ -146,14 +156,12 @@ impl Handler {
             member.nick.as_ref().unwrap_or(&member.user.name)
         ))
     }
-
+    //pub async fn interaction_create_with_result2() -> Result<(Option<String>,Option<>)>
     pub async fn interaction_create_with_result(
         &self,
         command: &Command,
         ctx: &Context,
         command_name: &str,
-        voice_type: &mut i64,
-        generator_type: &mut i64,
     ) -> Result<String> {
         match command_name {
             "join" => meta::join(&ctx, &command, &self.read_channel_id).await,
@@ -393,66 +401,47 @@ impl EventHandler for Handler {
                     let reader = std::io::BufReader::new(voicevox_file);
                     let voicevox_voice_types =
                         serde_json::from_reader::<_, Vec<Speaker>>(reader).unwrap();
-
                     let coeiro_file = File::open("speakers/coeiro.json").unwrap();
                     let reader = std::io::BufReader::new(coeiro_file);
                     let coeiro_voice_types =
                         serde_json::from_reader::<_, Vec<Speaker>>(reader).unwrap();
-
                     command
                         .create_interaction_response(&ctx.http, |response| {
                             response
                                 .kind(InteractionResponseType::ChannelMessageWithSource)
-                                .interaction_response_data(|m| {
-                                    m.components(|c| {
-                                        c.create_action_row(|r| {
-                                            r.create_select_menu(|m| {
-                                                m.options(|os| {
-                                                    for speaker in voicevox_voice_types {
-                                                        let name = speaker.name;
-                                                        for style in speaker.styles {
-                                                            os.create_option(|o| {
-                                                                o.label(format!(
-                                                                    "{} {}",
-                                                                    name, style.name
-                                                                ))
-                                                                .value(format!(
-                                                                    "{} {}",
-                                                                    Generators::VOICEVOX as isize,
-                                                                    style.id.to_string()
-                                                                ))
-                                                            });
+                                .interaction_response_data(|msg| {
+                                    msg.components(|c| {
+                                        for (idx, vec) in [voicevox_voice_types, coeiro_voice_types]
+                                            .iter()
+                                            .enumerate()
+                                        {
+                                            c.create_action_row(|r| {
+                                                r.create_select_menu(|menu| {
+                                                    menu.options(|os| {
+                                                        for speaker in vec {
+                                                            let name = &speaker.name;
+                                                            for style in speaker.styles.iter() {
+                                                                os.create_option(|o| {
+                                                                    o.label(format!(
+                                                                        "{} {}",
+                                                                        name, style.name
+                                                                    ))
+                                                                    .value(format!(
+                                                                        "{} {}",
+                                                                        Generators::VOICEVOX
+                                                                            as isize,
+                                                                        style.id.to_string()
+                                                                    ))
+                                                                });
+                                                            }
                                                         }
-                                                    }
-                                                    os
+                                                        os
+                                                    })
+                                                    .custom_id(idx.to_string())
                                                 })
-                                                .custom_id("0")
-                                            })
-                                        })
-                                        .create_action_row(|r| {
-                                            r.create_select_menu(|m| {
-                                                m.options(|os| {
-                                                    for speaker in coeiro_voice_types {
-                                                        let name = speaker.name;
-                                                        for style in speaker.styles {
-                                                            os.create_option(|o| {
-                                                                o.label(format!(
-                                                                    "{} {}",
-                                                                    name, style.name
-                                                                ))
-                                                                .value(format!(
-                                                                    "{} {}",
-                                                                    Generators::COEIROINK as isize,
-                                                                    style.id.to_string()
-                                                                ))
-                                                            });
-                                                        }
-                                                    }
-                                                    os
-                                                })
-                                                .custom_id("1")
-                                            })
-                                        })
+                                            });
+                                        }
+                                        c
                                     })
                                 })
                         })
@@ -463,16 +452,8 @@ impl EventHandler for Handler {
                 _ => (),
             };
 
-            let mut voice_type = 1;
-            let mut generator_type = 0;
             let content = self
-                .interaction_create_with_result(
-                    &command,
-                    &ctx,
-                    &command.data.name,
-                    &mut voice_type,
-                    &mut generator_type,
-                )
+                .interaction_create_with_result(&command, &ctx, &command.data.name)
                 .await;
             if let Err(why) = command
                 .create_interaction_response(&ctx.http, |response| {
@@ -494,7 +475,7 @@ impl EventHandler for Handler {
                     "walpha" => {
                         let input = get_argument(&command, 0).unwrap();
                         if let ArgumentValue::String(input) = input {
-                            if let Ok(file_path) = others::simple_wolfram_alpha(input).await {
+                            if let Ok(file_path) = util::simple_wolfram_alpha(input).await {
                                 let _ = command
                                     .channel_id
                                     .send_files(&ctx.http, vec![file_path.as_str()], |m| {
@@ -508,14 +489,7 @@ impl EventHandler for Handler {
                 }
             }
             if let Ok(content) = content {
-                play_raw_voice(
-                    &ctx,
-                    &content,
-                    voice_type as u8,
-                    generator_type as u8,
-                    command.guild_id.unwrap(),
-                )
-                .await;
+                play_raw_voice(&ctx, &content, 0, 0, command.guild_id.unwrap()).await;
             }
         } else if let Interaction::MessageComponent(msg) = interaction {
             if let ComponentType::SelectMenu = msg.data.component_type {
@@ -529,7 +503,6 @@ impl EventHandler for Handler {
                     .get_user_config_or_default(user_id as i64)
                     .await;
                 user_config.generator_type = generator_type;
-
                 user_config.voice_type = id;
                 self.database.update_user_config(&user_config).await;
                 let res = msg
