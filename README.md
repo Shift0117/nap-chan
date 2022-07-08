@@ -20,6 +20,5 @@ nakochan https://github.com/niuez/nakochan のような discord の読み上げ 
   - `/add before after` before を after と読むようにします
   - `/rem word` /add コマンドで登録した word の読み方をリセットします
   - `/hello greet` コマンドを入力した人が入室したときのあいさつを greet に変更します
-  - `/set_voice_type type` コマンドを入力した人の読み上げボイスタイプを変更します。type は 0 から 5 の整数です。
-  - `/play_sample_voice type` ボイスタイプを指定してサンプルボイスを再生します。type は 0 から 5 の整数です。
+  - `/set_voice_type` 読み上げボイスタイプを変更する Select menu を表示します
   - 
