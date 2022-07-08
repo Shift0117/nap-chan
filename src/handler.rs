@@ -411,7 +411,7 @@ impl EventHandler for Handler {
                                 .kind(InteractionResponseType::ChannelMessageWithSource)
                                 .interaction_response_data(|msg| {
                                     msg.components(|c| {
-                                        for (idx, vec) in [voicevox_voice_types, coeiro_voice_types]
+                                        for (idx, vec) in [coeiro_voice_types,voicevox_voice_types]
                                             .iter()
                                             .enumerate()
                                         {
@@ -428,7 +428,7 @@ impl EventHandler for Handler {
                                                                     ))
                                                                     .value(format!(
                                                                         "{} {}",
-                                                                        Generators::VOICEVOX
+                                                                        idx
                                                                             as isize,
                                                                         style.id.to_string()
                                                                     ))
