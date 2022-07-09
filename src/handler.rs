@@ -237,29 +237,16 @@ impl EventHandler for Handler {
     }
     async fn message(&self, ctx: Context, msg: Message) {
         let guild = msg.guild(&ctx.cache).await.unwrap();
-        let nako_id = ctx.cache.current_user_id().await;
+        let bot_id = ctx.cache.current_user_id().await;
         let voice_channel_id = guild
             .voice_states
-            .get(&msg.author.id)
+            .get(&bot_id)
             .and_then(|voice_states| voice_states.channel_id);
         let text_channel_id = msg.channel_id;
         let read_channel_id = self.read_channel_id.lock().await.clone();
         if read_channel_id == Some(text_channel_id) {
             if let Some(voice_channel_id) = voice_channel_id {
-                let members = ctx
-                    .cache
-                    .channel(voice_channel_id)
-                    .await
-                    .unwrap()
-                    .guild()
-                    .unwrap()
-                    .members(&ctx.cache)
-                    .await
-                    .unwrap()
-                    .iter()
-                    .map(|member| member.user.id)
-                    .collect::<Vec<_>>();
-                if members.contains(&nako_id) && msg.author.id != nako_id {
+                if msg.author.id != bot_id {
                     play_voice(&ctx, msg, self).await;
                 };
             }

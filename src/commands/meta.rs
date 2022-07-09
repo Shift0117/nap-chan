@@ -38,6 +38,7 @@ pub async fn join(
     let (handle_lock, _) = manager.join(guild_id, connect_to).await;
     let mut handle = handle_lock.lock().await;
     handle.deafen(true).await.unwrap();
+    
     handle.add_global_event(Event::Track(TrackEvent::End), TrackEndNotifier);
     *read_channel_id.lock().await = Some(text_channel_id);
     Ok(())
