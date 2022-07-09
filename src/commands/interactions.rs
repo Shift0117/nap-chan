@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 use crate::{
     handler::{get_argument, ArgumentValue, Command, Handler, SlashCommandTextResult},
     lib::db::{DictDB, UserConfigDB},
@@ -9,6 +7,17 @@ use anyhow::{anyhow, Result};
 use serenity::client::Context;
 
 use super::{meta, util};
+
+pub fn get_display_name(command: &Command) -> String {
+    command
+        .member
+        .as_ref()
+        .unwrap()
+        .nick
+        .as_ref()
+        .unwrap_or(&command.user.name)
+        .to_string()
+}
 
 pub async fn interaction_create_with_text(
     handler: &Handler,
@@ -71,7 +80,7 @@ pub async fn interaction_create_with_text(
                 handler.database.update_user_config(&user_config).await;
                 Ok(SlashCommandTextResult::from_str(&format!(
                     "{}さん、これから{}ってあいさつするね",
-                    command.member.as_ref().unwrap().user.name,
+                    get_display_name(&command),
                     greet
                 )))
             } else {
@@ -87,7 +96,7 @@ pub async fn interaction_create_with_text(
                 handler.database.update_user_config(&user_config).await;
                 Ok(SlashCommandTextResult::from_str(&format!(
                     "{}さん、これから{}ってあいさつするね",
-                    command.member.as_ref().unwrap().user.name,
+                    get_display_name(&command),
                     greet
                 )))
             } else {
@@ -104,7 +113,7 @@ pub async fn interaction_create_with_text(
                 handler.database.update_user_config(&user_config).await;
                 Ok(SlashCommandTextResult::from_str(&format!(
                     "{}さん、これからは{}って呼ぶね",
-                    command.member.as_ref().unwrap().user.name,
+                    get_display_name(&command),
                     nickname.to_string()
                 )))
             } else {
@@ -128,15 +137,7 @@ pub async fn interaction_create_with_text(
                 unreachable!()
             }
         }
-        "info" => {
-            let user_id = command.user.id.0 as i64;
-            let res = handler.database.get_user_config_or_default(user_id).await;
-            Ok(SlashCommandTextResult::from_str_and_flags(
-                &format!("{}", res),
-                false,
-                false,
-            ))
-        }
+
         _ => unreachable!(),
     }
 }

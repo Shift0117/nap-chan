@@ -27,11 +27,15 @@ use tokio::sync::Mutex;
 use tracing::info;
 
 use crate::{
-    commands::{definition, interactions::interaction_create_with_text, meta, util},
+    commands::{
+        definition,
+        interactions::{get_display_name, interaction_create_with_text},
+        meta, util,
+    },
     lib::{
         db::{DictDB, UserConfigDB},
         text::TextMessage,
-        voice::{play_raw_voice, play_voice},
+        voice::{get_speaker_data, play_raw_voice, play_voice},
     },
 };
 pub const GUILD_IDS_PATH: &str = "guilds.json";
@@ -41,15 +45,15 @@ struct Style {
     id: u8,
 }
 #[derive(Deserialize, Clone)]
-struct Speaker {
+pub struct Speaker {
     name: String,
     speaker_uuid: String,
     styles: Vec<Style>,
     version: String,
 }
 
-#[derive(Clone, Copy)]
-enum Generators {
+#[derive(Clone, Copy, Hash)]
+pub enum Generators {
     COEIROINK = 0,
     VOICEVOX = 1,
 }
@@ -160,7 +164,7 @@ impl EventHandler for Handler {
     ) {
         let bot_id = &ctx.cache.current_user_id().await;
         let _ = async move {
-            let nako_channel_id = guild_id?
+            let bot_channel_id = guild_id?
                 .to_guild_cached(&ctx.cache)
                 .await?
                 .voice_states
@@ -183,32 +187,42 @@ impl EventHandler for Handler {
                 .iter()
                 .filter(|member| member.user.id.0 != bot_id.0)
                 .count();
+
             if members_count == 0 {
                 meta::leave(&ctx, guild_id?).await.ok();
                 return Some(());
             }
+
             let user_id = new.user_id;
+
             if bot_id.0 == user_id.0 {
                 return Some(());
             }
-            let user_name = &new.member.as_ref()?.nick.as_ref()?;
 
+            let user_name = &new
+                .member
+                .as_ref()?
+                .nick
+                .as_ref()
+                .unwrap_or(&new.member.as_ref()?.user.name);
+
+            info!(
+                "old = {:?}\nnew = {:?}\nbot_channel_id = {}\nbot_id = {}\nuser_id = {}",
+                &old, &new, bot_channel_id, bot_id, user_id
+            );
             let greeting_type = if let Some(ref old) = old {
-                if old.self_mute != new.self_mute
-                    || old.self_deaf != new.self_deaf
-                    || old.self_video != new.self_video
-                    || old.self_stream != new.self_stream
-                {
-                    return Some(());
-                }
-                if old.channel_id == Some(nako_channel_id) {
+                if old.channel_id == Some(bot_channel_id) && new.channel_id != old.channel_id {
                     1
-                } else {
+                } else if old.channel_id != Some(bot_channel_id) && new.channel_id == old.channel_id
+                {
                     0
+                } else {
+                    return Some(());
                 }
             } else {
                 0
             };
+            info!("greeting_type = {}", greeting_type);
             let uid = user_id.0 as i64;
 
             let user_config = self.database.get_user_config_or_default(uid).await;
@@ -257,7 +271,7 @@ impl EventHandler for Handler {
             match command.data.name.as_str() {
                 // respond instantly with text
                 "add" | "rem" | "hello" | "bye" | "join" | "leave" | "mute" | "unmute"
-                | "rand_member" | "set_nickname" | "info" => {
+                | "rand_member" | "set_nickname" => {
                     let content =
                         interaction_create_with_text(&self, &command, &ctx, &command.data.name)
                             .await;
@@ -303,25 +317,39 @@ impl EventHandler for Handler {
                         }
                     }
                 }
+                "info" => {
+                    let user_id = command.user.id.0 as i64;
+                    let user_config = self.database.get_user_config_or_default(user_id).await;
+
+                    command
+                        .create_interaction_response(&ctx.http, |response| {
+                            response
+                                .kind(InteractionResponseType::ChannelMessageWithSource)
+                                .interaction_response_data(|msg| {
+                                    msg.create_embed(|emb| {
+                                        emb.fields([(
+                                            "nickname",
+                                            user_config
+                                                .read_nickname
+                                                .as_ref()
+                                                .unwrap_or(&get_display_name(&command)),
+                                            true,
+                                        )])
+                                    })
+                                })
+                        })
+                        .await
+                        .ok();
+                }
                 "set_voice_type" => {
-                    let voicevox_file = File::open("speakers/voicevox.json").unwrap();
-                    let reader = std::io::BufReader::new(voicevox_file);
-                    let voicevox_voice_types =
-                        serde_json::from_reader::<_, Vec<Speaker>>(reader).unwrap();
-                    let coeiro_file = File::open("speakers/coeiro.json").unwrap();
-                    let reader = std::io::BufReader::new(coeiro_file);
-                    let coeiro_voice_types =
-                        serde_json::from_reader::<_, Vec<Speaker>>(reader).unwrap();
+                    let voice_types = get_speaker_data().await;
                     command
                         .create_interaction_response(&ctx.http, |response| {
                             response
                                 .kind(InteractionResponseType::ChannelMessageWithSource)
                                 .interaction_response_data(|msg| {
                                     msg.components(|c| {
-                                        for (idx, vec) in [coeiro_voice_types, voicevox_voice_types]
-                                            .iter()
-                                            .enumerate()
-                                        {
+                                        for (idx, vec) in voice_types.iter().enumerate() {
                                             c.create_action_row(|r| {
                                                 r.create_select_menu(|menu| {
                                                     menu.options(|os| {
@@ -335,7 +363,7 @@ impl EventHandler for Handler {
                                                                     ))
                                                                     .value(format!(
                                                                         "{} {}",
-                                                                        idx as isize,
+                                                                        idx,
                                                                         style.id.to_string()
                                                                     ))
                                                                 });

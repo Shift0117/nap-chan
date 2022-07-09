@@ -16,6 +16,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::handler::{Handler, GUILD_IDS_PATH};
+use crate::lib::voice::get_speaker_data;
 #[derive(Debug)]
 pub struct UserConfig {
     user_id: i64,
@@ -128,7 +129,6 @@ async fn main() {
             .await
             .expect("Err creating client");
     std::fs::create_dir("temp").ok();
-
     tokio::spawn(async move {
         let _ = client
             .start()

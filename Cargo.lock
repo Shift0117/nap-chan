@@ -374,6 +374,7 @@ dependencies = [
  "alkana-rs",
  "anyhow",
  "dotenv",
+ "once_cell",
  "rand 0.8.5",
  "regex",
  "reqwest",
