@@ -7,7 +7,7 @@ use std::{
     sync::RwLock,
 };
 
-use reqwest;
+use reqwes&t;
 use serenity::{
     client::Context,
     model::{channel::Message, id::GuildId},
@@ -69,7 +69,7 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
     let cleaned_text = format!(
         "{} {}",
         if msg.author.id != ctx.cache.as_ref().current_user_id().await {
-            &nickname
+            &nickname.make_read_text(&handler.database)
         } else {
             ""
         },
