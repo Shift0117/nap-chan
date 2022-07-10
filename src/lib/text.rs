@@ -61,7 +61,7 @@ impl TextMessage for String {
         text
     }
     fn remove_custom_emoji(&self) -> Self {
-        let re = regex::Regex::new(r"<@.+?>").unwrap();
+        let re = regex::Regex::new(r"<:.+?:.+?>").unwrap();
         re.replace_all(self, "").to_string()
     }
     async fn make_read_text(&self, database: &sqlx::SqlitePool) -> Self {
@@ -169,4 +169,10 @@ fn min_split_test() {
 
     let unknown = "fssjkfsahfkajsh";
     assert_eq!(min_split(unknown), None);
+}
+
+#[test]
+fn emoji_test() {
+    let war = r"<:dot_war:984676641525612574>".to_string();
+    assert_eq!(war.remove_custom_emoji(),String::new())
 }

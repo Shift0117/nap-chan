@@ -206,10 +206,10 @@ impl EventHandler for Handler {
                 .as_ref()
                 .unwrap_or(&new.member.as_ref()?.user.name);
 
-            info!(
-                "old = {:?}\nnew = {:?}\nbot_channel_id = {}\nbot_id = {}\nuser_id = {}",
-                &old, &new, bot_channel_id, bot_id, user_id
-            );
+            // info!(
+            //     "old = {:?}\nnew = {:?}\nbot_channel_id = {}\nbot_id = {}\nuser_id = {}",
+            //     &old, &new, bot_channel_id, bot_id, user_id
+            // );
             let greeting_type = if let Some(ref old) = old {
                 if old.channel_id == Some(bot_channel_id) && new.channel_id != old.channel_id {
                     1
@@ -222,7 +222,7 @@ impl EventHandler for Handler {
             } else {
                 0
             };
-            info!("greeting_type = {}", greeting_type);
+            //info!("greeting_type = {}", greeting_type);
             let uid = user_id.0 as i64;
 
             let user_config = self.database.get_user_config_or_default(uid).await;

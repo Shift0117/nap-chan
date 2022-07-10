@@ -7,7 +7,7 @@ use std::{
     sync::RwLock,
 };
 
-use reqwes&t;
+use reqwest;
 use serenity::{
     client::Context,
     model::{channel::Message, id::GuildId},
@@ -63,15 +63,16 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
         .await
         .make_read_text(&handler.database)
         .await;
+        info!("{}",&cleaned_content);
     if cleaned_content.chars().all(|c| !c.is_alphanumeric()) {
         return ();
     }
     let cleaned_text = format!(
         "{} {}",
         if msg.author.id != ctx.cache.as_ref().current_user_id().await {
-            &nickname.make_read_text(&handler.database)
+            nickname.make_read_text(&handler.database).await
         } else {
-            ""
+            String::new()
         },
         cleaned_content
     );
@@ -204,3 +205,4 @@ pub async fn get_speaker_data() -> [Vec<Speaker>; 2] {
     let coeiro_voice_types = serde_json::from_reader::<_, Vec<Speaker>>(reader).unwrap();
     [coeiro_voice_types, voicevox_voice_types]
 }
+
