@@ -1,5 +1,6 @@
 use regex;
 use serenity::async_trait;
+use tracing::info;
 
 use super::db::DictDB;
 use alkana_rs::ALKANA;
@@ -62,7 +63,17 @@ impl TextMessage for String {
     }
     fn remove_custom_emoji(&self) -> Self {
         let re = regex::Regex::new(r"<:.+?:.+?>").unwrap();
-        re.replace_all(self, "").to_string()
+        let num = regex::Regex::new(r":[0-9]+>").unwrap();
+        if let Some(cap) = re.captures(self) {
+            let cap = cap.get(0).unwrap();
+            let str = cap.as_str();
+            info!("{}",str);
+            let str = num.replace_all(str, "").to_string()[2..].to_string();
+            info!("{}",str);
+            re.replace_all(self, str).to_string()
+        } else {
+            self.to_string()
+        }
     }
     async fn make_read_text(&self, database: &sqlx::SqlitePool) -> Self {
         self.replace_url()
@@ -173,6 +184,6 @@ fn min_split_test() {
 
 #[test]
 fn emoji_test() {
-    let war = r"<:dot_war:984676641525612574>".to_string();
-    assert_eq!(war.remove_custom_emoji(),String::new())
+    let war = r"うえすぎ <:dot_war:984676641525612574>".to_string();
+    assert_eq!(war.remove_custom_emoji(), "うえすぎ dot_war".to_string())
 }
