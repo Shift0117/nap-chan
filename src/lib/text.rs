@@ -14,6 +14,7 @@ pub trait TextMessage {
     fn remove_custom_emoji(&self) -> Self;
     async fn make_read_text(&self, database: &sqlx::SqlitePool) -> Self;
     fn hiraganize(&self) -> Self;
+    fn remove_code_block(&self) -> Self;
 }
 #[async_trait]
 impl TextMessage for String {
@@ -22,7 +23,7 @@ impl TextMessage for String {
         re.replace_all(self, "URL").to_string()
     }
     fn remove_spoiler(&self) -> Self {
-        let re = regex::Regex::new(r"\|\|.+?\|\|").unwrap();
+        let re = regex::Regex::new(r"\|\|[\s\S]*\|\|").unwrap();
         re.replace_all(self, "").to_string()
     }
     async fn replace_by_dict(&self, database: &sqlx::SqlitePool) -> Self {
@@ -62,14 +63,14 @@ impl TextMessage for String {
         text
     }
     fn remove_custom_emoji(&self) -> Self {
-        let re = regex::Regex::new(r"<:.+?:.+?>").unwrap();
+        let re = regex::Regex::new(r"<a?:.+?:.+?>").unwrap();
         let num = regex::Regex::new(r":[0-9]+>").unwrap();
         if let Some(cap) = re.captures(self) {
             let cap = cap.get(0).unwrap();
             let str = cap.as_str();
-            info!("{}",str);
+            info!("{}", str);
             let str = num.replace_all(str, "").to_string()[2..].to_string();
-            info!("{}",str);
+            info!("{}", str);
             re.replace_all(self, str).to_string()
         } else {
             self.to_string()
@@ -78,10 +79,15 @@ impl TextMessage for String {
     async fn make_read_text(&self, database: &sqlx::SqlitePool) -> Self {
         self.replace_url()
             .remove_spoiler()
+            .remove_code_block()
             .remove_custom_emoji()
             .replace_by_dict(database)
             .await
             .hiraganize()
+    }
+    fn remove_code_block(&self) -> Self {
+        let re = regex::Regex::new(r#"```[\s\S]*```"#).unwrap();
+        re.replace_all(self, "").to_string()
     }
 }
 
@@ -186,4 +192,11 @@ fn min_split_test() {
 fn emoji_test() {
     let war = r"うえすぎ <:dot_war:984676641525612574>".to_string();
     assert_eq!(war.remove_custom_emoji(), "うえすぎ dot_war".to_string())
+}
+
+#[test]
+fn code_block_test() {
+    let text = "aaa ``` test ``` bbb"
+        .to_string();
+    assert_eq!("aaa  bbb", text.remove_code_block());
 }

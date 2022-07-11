@@ -1,7 +1,14 @@
+use std::{
+    fs::{self, File},
+    io::Write,
+};
+
+use serde::Deserialize;
 use serenity::async_trait;
 use sqlx::{query, query_as};
+use tracing::info;
 
-use crate::{Dict, UserConfig};
+use crate::{handler::Generators, Dict};
 use anyhow::{anyhow, Result};
 
 #[async_trait]
@@ -10,6 +17,28 @@ pub trait UserConfigDB {
     async fn get_user_config(&self, user_id: i64) -> Result<UserConfig>;
     async fn update_user_config(&self, user_config: &UserConfig) -> u64;
 }
+
+#[derive(Deserialize, Clone)]
+pub struct Style {
+    pub name: String,
+    pub id: u8,
+}
+#[derive(Deserialize, Clone)]
+pub struct Speaker {
+    pub name: String,
+    pub styles: Vec<Style>,
+}
+
+#[derive(Debug)]
+pub struct UserConfig {
+    pub user_id: i64,
+    pub hello: String,
+    pub bye: String,
+    pub voice_type: i64,
+    pub generator_type: i64,
+    pub read_nickname: Option<String>,
+}
+
 #[async_trait]
 impl UserConfigDB for sqlx::SqlitePool {
     async fn get_user_config(&self, user_id: i64) -> Result<UserConfig> {
@@ -81,4 +110,115 @@ impl DictDB for sqlx::SqlitePool {
             .map_err(|e| e.into())
             .map(|_| ())
     }
+}
+
+#[async_trait]
+pub trait SpeakerDB {
+    async fn speaker_name_to_id(&self, name: &str) -> Result<(Generators, u8)>;
+    async fn speaker_id_to_name(&self, generator_type: Generators, id: u8) -> Result<String>;
+    async fn generate_speaker_db(&self) -> Result<()>;
+}
+
+#[async_trait]
+impl SpeakerDB for sqlx::SqlitePool {
+    async fn speaker_name_to_id(&self, name: &str) -> Result<(Generators, u8)> {
+        let q = query!(
+            "SELECT generator_type,style_id FROM speakers WHERE style_name = ?",
+            name
+        )
+        .fetch_one(self)
+        .await?;
+        Ok((
+            Generators::try_from(q.generator_type.as_str())?,
+            q.style_id as u8,
+        ))
+    }
+    async fn speaker_id_to_name(&self, generator_type: Generators, id: u8) -> Result<String> {
+        let str: &str = generator_type.into();
+        let q = query!(
+            "SELECT name,style_name FROM speakers WHERE generator_type = ? AND style_id = ?",
+            str,
+            id
+        )
+        .fetch_one(self)
+        .await?;
+        Ok(format!("{} {}", q.name, q.style_name))
+    }
+    async fn generate_speaker_db(&self) -> Result<()> {
+        dotenv::dotenv().ok();
+        let voicevox_voice_types: Vec<Speaker> = {
+            let base_url =
+                std::env::var("BASE_URL_VOICEVOX").expect("environment variable not found");
+            let query_url = format!("{}/speakers", base_url);
+            let client = reqwest::Client::new();
+            let res = client
+                .get(query_url)
+                .send()
+                .await
+                .expect("Panic in speaker info query");
+
+            //info!("{:?}",res.text().await);
+            res.json().await.unwrap()
+        };
+        for speaker in voicevox_voice_types {
+            for style in speaker.styles {
+                if let None = query!(
+                    "SELECT * FROM speakers WHERE generator_type = ? AND style_id = ?",
+                    "VOICEVOX",
+                    style.id
+                )
+                .fetch_optional(self)
+                .await?
+                {
+                    query!(
+                        "INSERT INTO speakers (name,style_id,style_name,generator_type) VALUES (?,?,?,?)",
+                        speaker.name,
+                        style.id,
+                        style.name,
+                        "VOICEVOX"
+                    )
+                    .execute(self)
+                    .await
+                    .unwrap();
+                }
+            }
+        }
+        let coeiro_voice_types: Vec<Speaker> = {
+            let base_url =
+                std::env::var("BASE_URL_COEIRO").expect("environment variable not found");
+            let query_url = format!("{}/speakers", base_url);
+            let client = reqwest::Client::new();
+            let res = client
+                .get(query_url)
+                .send()
+                .await
+                .expect("Panic in speaker info query");
+            res.json().await.unwrap()
+        };
+        for speaker in coeiro_voice_types {
+            for style in speaker.styles {
+                if let None = query!(
+                    "SELECT * FROM speakers WHERE generator_type = ? AND style_id = ?",
+                    "COEIROINK",
+                    style.id
+                )
+                .fetch_optional(self)
+                .await?
+                {
+                    query!(
+                        "INSERT INTO speakers (name,style_id,style_name,generator_type) VALUES (?,?,?,?)",
+                        speaker.name,
+                        style.id,
+                        style.name,
+                        "COEIROINK"
+                    )
+                    .execute(self)
+                    .await
+                    .unwrap();
+                }
+            }
+        }
+        Ok(())
+    }
+    
 }

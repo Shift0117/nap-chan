@@ -16,32 +16,22 @@ use serenity::{
 use tempfile;
 use tracing::info;
 
-use crate::handler::{Generators, Handler, Speaker};
+use crate::handler::{Generators, Handler};
 
-use super::{db::UserConfigDB, text::TextMessage};
+use super::{
+    db::{Speaker, UserConfigDB},
+    text::TextMessage,
+};
 
-//pub static SPEAKER_BIJECTION: Lazy<SpeakerBijection> = Lazy::new(SpeakerBijection::new);
 #[derive(Hash)]
 pub struct SpeakerId {
     id: u8,
     generator: Generators,
 }
 
-#[derive(Default)]
-pub struct SpeakerBijection {
-    name_to_id: RwLock<HashMap<String, SpeakerId>>,
-    id_to_name: RwLock<HashMap<SpeakerId, String>>,
-}
-
-impl SpeakerBijection {
-    pub async fn new() -> Self {
-        let voice_types = get_speaker_data().await;
-
-        todo!()
-    }
-}
-
 pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
+    info!("{}", &msg.content);
+
     let mut temp_file = tempfile::Builder::new().tempfile_in("temp").unwrap();
     let clean_option = ContentSafeOptions::new();
     let user_id = msg.author.id.0 as i64;
@@ -63,7 +53,7 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
         .await
         .make_read_text(&handler.database)
         .await;
-        info!("{}",&cleaned_content);
+    info!("{}", &cleaned_content);
     if cleaned_content.chars().all(|c| !c.is_alphanumeric()) {
         return ();
     }
@@ -161,48 +151,3 @@ pub async fn play_raw_voice(
         handler.enqueue_source(source.into());
     }
 }
-
-pub async fn get_speaker_data() -> [Vec<Speaker>; 2] {
-    dotenv::dotenv().ok();
-    fs::create_dir("speakers").ok();
-    let voicevox_file = match File::open("speakers/voicevox.json") {
-        Ok(file) => file,
-        Err(_) => {
-            let base_url =
-                std::env::var("BASE_URL_VOICEVOX").expect("environment variable not found");
-            let query_url = format!("{}/speaker", base_url);
-            let client = reqwest::Client::new();
-            let res = client
-                .get(query_url)
-                .send()
-                .await
-                .expect("Panic in speaker info query");
-            let mut file = File::create("speakers/voicevox.json").unwrap();
-            file.write(&res.bytes().await.unwrap()).ok();
-            file
-        }
-    };
-    let reader = std::io::BufReader::new(voicevox_file);
-    let voicevox_voice_types = serde_json::from_reader::<_, Vec<Speaker>>(reader).unwrap();
-    let coeiro_file = match File::open("speakers/coeiro.json") {
-        Ok(file) => file,
-        Err(_) => {
-            let base_url =
-                std::env::var("BASE_URL_COEIROINK").expect("environment variable not found");
-            let query_url = format!("{}/speaker", base_url);
-            let client = reqwest::Client::new();
-            let res = client
-                .get(query_url)
-                .send()
-                .await
-                .expect("Panic in speaker info query");
-            let mut file = File::create("speakers/coeiro.json").unwrap();
-            file.write(&res.bytes().await.unwrap()).ok();
-            file
-        }
-    };
-    let reader = std::io::BufReader::new(coeiro_file);
-    let coeiro_voice_types = serde_json::from_reader::<_, Vec<Speaker>>(reader).unwrap();
-    [coeiro_voice_types, voicevox_voice_types]
-}
-

@@ -16,31 +16,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::handler::{Handler, GUILD_IDS_PATH};
-use crate::lib::voice::get_speaker_data;
-#[derive(Debug)]
-pub struct UserConfig {
-    user_id: i64,
-    hello: String,
-    bye: String,
-    voice_type: i64,
-    generator_type: i64,
-    read_nickname: Option<String>,
-}
-
-impl std::fmt::Display for UserConfig {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "hello = {},bye = {},voice = {},read_nickname = {}",
-            self.hello,
-            self.bye,
-            self.voice_type,
-            self.read_nickname
-                .as_ref()
-                .unwrap_or(&"default".to_string())
-        )
-    }
-}
+use crate::lib::db::SpeakerDB;
 
 #[derive(Debug)]
 pub struct Dict {
@@ -112,7 +88,7 @@ async fn main() {
         .run(&database)
         .await
         .expect("Couldn't run database migrations");
-
+    database.generate_speaker_db().await.unwrap();
     let application_id = std::env::var("APP_ID").unwrap().parse().unwrap();
     let token = std::env::var("DISCORD_TOKEN").expect("environment variable not found");
     let framework = StandardFramework::new()
@@ -129,6 +105,7 @@ async fn main() {
             .await
             .expect("Err creating client");
     std::fs::create_dir("temp").ok();
+
     tokio::spawn(async move {
         let _ = client
             .start()

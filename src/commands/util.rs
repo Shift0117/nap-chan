@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use serenity::{client::Context, model::guild::Member};
 use std::io::Write;
 
-use crate::{handler::Command, UserConfig};
+use crate::handler::Command;
 
 pub async fn simple_wolfram_alpha(input: &str) -> Result<String> {
     dotenv::dotenv().ok();

@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use serde::Deserialize;
 use serenity::{
     async_trait,
+    builder::CreateSelectMenu,
     client::{Context, EventHandler},
     model::{
         channel::Message,
@@ -16,6 +17,7 @@ use serenity::{
         prelude::{Ready, VoiceState},
     },
 };
+use sqlx::query;
 use std::{
     collections::HashSet,
     convert::TryInto,
@@ -35,27 +37,35 @@ use crate::{
     lib::{
         db::{DictDB, UserConfigDB},
         text::TextMessage,
-        voice::{get_speaker_data, play_raw_voice, play_voice},
+        voice::{play_raw_voice, play_voice},
     },
 };
 pub const GUILD_IDS_PATH: &str = "guilds.json";
-#[derive(Deserialize, Clone)]
-struct Style {
-    name: String,
-    id: u8,
-}
-#[derive(Deserialize, Clone)]
-pub struct Speaker {
-    name: String,
-    speaker_uuid: String,
-    styles: Vec<Style>,
-    version: String,
-}
 
 #[derive(Clone, Copy, Hash)]
 pub enum Generators {
     COEIROINK = 0,
     VOICEVOX = 1,
+}
+impl TryFrom<&str> for Generators {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "COEIROINK" => Ok(Self::COEIROINK),
+            "VOICEVOX" => Ok(Self::VOICEVOX),
+            _ => Err(anyhow!("no such generator_type")),
+        }
+    }
+}
+
+impl Into<&str> for Generators {
+    fn into(self) -> &'static str {
+        match self {
+            Self::COEIROINK => "COEIROINK",
+            Self::VOICEVOX => "VOICEVOX",
+        }
+    }
 }
 
 pub struct Handler {
@@ -258,6 +268,7 @@ impl EventHandler for Handler {
             .and_then(|voice_states| voice_states.channel_id);
         let text_channel_id = msg.channel_id;
         let read_channel_id = self.read_channel_id.lock().await.clone();
+        info!("msg = {:?}", &msg);
         if read_channel_id == Some(text_channel_id) {
             if let Some(voice_channel_id) = voice_channel_id {
                 if msg.author.id != bot_id {
@@ -342,45 +353,48 @@ impl EventHandler for Handler {
                         .ok();
                 }
                 "set_voice_type" => {
-                    let voice_types = get_speaker_data().await;
-                    command
-                        .create_interaction_response(&ctx.http, |response| {
-                            response
-                                .kind(InteractionResponseType::ChannelMessageWithSource)
-                                .interaction_response_data(|msg| {
-                                    msg.components(|c| {
-                                        for (idx, vec) in voice_types.iter().enumerate() {
-                                            c.create_action_row(|r| {
-                                                r.create_select_menu(|menu| {
-                                                    menu.options(|os| {
-                                                        for speaker in vec {
-                                                            let name = &speaker.name;
-                                                            for style in speaker.styles.iter() {
-                                                                os.create_option(|o| {
-                                                                    o.label(format!(
-                                                                        "{} {}",
-                                                                        name, style.name
-                                                                    ))
-                                                                    .value(format!(
-                                                                        "{} {}",
-                                                                        idx,
-                                                                        style.id.to_string()
-                                                                    ))
-                                                                });
-                                                            }
-                                                        }
-                                                        os
-                                                    })
-                                                    .custom_id(idx.to_string())
-                                                })
-                                            });
-                                        }
-                                        c
-                                    })
-                                })
-                        })
+                    struct VoiceType {
+                        id: i64,
+                        name: String,
+                        style_id: i64,
+                        style_name: String,
+                        generator_type: String,
+                    }
+                    let speakers = sqlx::query_as!(VoiceType, "SELECT * FROM speakers")
+                        .fetch_all(&self.database)
                         .await
-                        .ok();
+                        .unwrap();
+                    let generators = ["COEIROINK", "VOICEVOX"];
+                    let menus = generators.iter().map(|gen| {
+                        CreateSelectMenu::default()
+                            .options(|os| {
+                                for speaker in speakers
+                                    .iter()
+                                    .filter(|x| x.generator_type == gen.to_string())
+                                {
+                                    os.create_option(|o| {
+                                        o.label(format!("{} {}", speaker.name, speaker.style_name))
+                                            .value(speaker.id)
+                                    });
+                                }
+                                os
+                            }).custom_id(gen)
+                            .clone()
+                    });
+                    let _ = command.create_interaction_response(&ctx.http, |response| {
+                        response
+                            .kind(InteractionResponseType::ChannelMessageWithSource)
+                            .interaction_response_data(|msg| {
+                                msg.components(|c| {
+                                    for menu in menus {
+                                        c.create_action_row(|row| {
+                                            row.add_select_menu(menu)
+                                        });
+                                    }
+                                    c
+                                })
+                            })
+                    }).await;
                     return;
                 }
                 "walpha" => {
@@ -409,16 +423,17 @@ impl EventHandler for Handler {
         } else if let Interaction::MessageComponent(msg) = interaction {
             if let ComponentType::SelectMenu = msg.data.component_type {
                 info!("{:?}", msg.data.values);
-                let mut itr = msg.data.values[0].split(" ");
-                let generator_type = itr.next().unwrap().parse().unwrap();
-                let id = itr.next().unwrap().parse().unwrap();
+                let id:i64 = msg.data.values[0].parse().unwrap();
+                let q = query!("SELECT generator_type,style_id FROM speakers WHERE id = ?",id).fetch_one(&self.database).await.unwrap();
+                let generator_type = q.generator_type;
+                let style_id = q.style_id;
                 let user_id = msg.user.id.0;
                 let mut user_config = self
                     .database
                     .get_user_config_or_default(user_id as i64)
                     .await;
-                user_config.generator_type = generator_type;
-                user_config.voice_type = id;
+                user_config.generator_type = Generators::try_from(generator_type.as_str()).unwrap() as i64;
+                user_config.voice_type = style_id;
                 self.database.update_user_config(&user_config).await;
                 let res = msg
                     .create_interaction_response(&ctx.http, |res| {
