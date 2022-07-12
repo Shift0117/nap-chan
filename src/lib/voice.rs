@@ -19,7 +19,7 @@ use tracing::info;
 use crate::handler::{Generators, Handler};
 
 use super::{
-    db::{Speaker, UserConfigDB},
+    db::{ UserConfigDB},
     text::TextMessage,
 };
 

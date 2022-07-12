@@ -75,6 +75,7 @@ pub async fn interaction_create_with_text(
             let greet = get_argument(&command, 0)?;
             if let ArgumentValue::String(greet) = greet {
                 let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
+
                 let mut user_config = handler.database.get_user_config_or_default(user_id).await;
                 user_config.hello = greet.to_string();
                 handler.database.update_user_config(&user_config).await;

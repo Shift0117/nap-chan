@@ -35,7 +35,7 @@ use crate::{
         meta, util,
     },
     lib::{
-        db::{DictDB, UserConfigDB},
+        db::{DictDB, UserConfigDB,SpeakerDB, VoiceType},
         text::TextMessage,
         voice::{play_raw_voice, play_voice},
     },
@@ -55,6 +55,18 @@ impl TryFrom<&str> for Generators {
             "COEIROINK" => Ok(Self::COEIROINK),
             "VOICEVOX" => Ok(Self::VOICEVOX),
             _ => Err(anyhow!("no such generator_type")),
+        }
+    }
+}
+
+impl TryFrom<u8> for Generators {
+    type Error = anyhow::Error;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::COEIROINK),
+            1 => Ok(Self::VOICEVOX),
+            _ => Err(anyhow!("no such generator_type"))
         }
     }
 }
@@ -332,6 +344,7 @@ impl EventHandler for Handler {
                     let user_id = command.user.id.0 as i64;
                     let user_config = self.database.get_user_config_or_default(user_id).await;
 
+                    let voice_name = self.database.speaker_id_to_name((user_config.generator_type as u8).try_into().unwrap(), user_config.voice_type as u8).await.unwrap();
                     command
                         .create_interaction_response(&ctx.http, |response| {
                             response
@@ -345,7 +358,7 @@ impl EventHandler for Handler {
                                                 .as_ref()
                                                 .unwrap_or(&get_display_name(&command)),
                                             true,
-                                        )])
+                                        ),("voice",&voice_name,true),("hello",&user_config.hello,true),("bye",&user_config.bye,true)])
                                     })
                                 })
                         })
@@ -353,13 +366,8 @@ impl EventHandler for Handler {
                         .ok();
                 }
                 "set_voice_type" => {
-                    struct VoiceType {
-                        id: i64,
-                        name: String,
-                        style_id: i64,
-                        style_name: String,
-                        generator_type: String,
-                    }
+                    
+                    
                     let speakers = sqlx::query_as!(VoiceType, "SELECT * FROM speakers")
                         .fetch_all(&self.database)
                         .await
@@ -399,7 +407,6 @@ impl EventHandler for Handler {
                 }
                 "walpha" => {
                     let input = get_argument(&command, 0).unwrap();
-
                     if let ArgumentValue::String(input) = input {
                         let res = command
                             .create_interaction_response(&ctx.http, |res| {

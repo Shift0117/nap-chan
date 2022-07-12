@@ -5,7 +5,7 @@ use std::{
 
 use serde::Deserialize;
 use serenity::async_trait;
-use sqlx::{query, query_as};
+use sqlx::{query, query_as, Acquire};
 use tracing::info;
 
 use crate::{handler::Generators, Dict};
@@ -18,17 +18,6 @@ pub trait UserConfigDB {
     async fn update_user_config(&self, user_config: &UserConfig) -> u64;
 }
 
-#[derive(Deserialize, Clone)]
-pub struct Style {
-    pub name: String,
-    pub id: u8,
-}
-#[derive(Deserialize, Clone)]
-pub struct Speaker {
-    pub name: String,
-    pub styles: Vec<Style>,
-}
-
 #[derive(Debug)]
 pub struct UserConfig {
     pub user_id: i64,
@@ -37,6 +26,14 @@ pub struct UserConfig {
     pub voice_type: i64,
     pub generator_type: i64,
     pub read_nickname: Option<String>,
+}
+
+pub struct VoiceType {
+    pub id: i64,
+    pub name: String,
+    pub style_id: i64,
+    pub style_name: String,
+    pub generator_type: String,
 }
 
 #[async_trait]
@@ -81,34 +78,39 @@ pub trait DictDB {
 #[async_trait]
 impl DictDB for sqlx::SqlitePool {
     async fn update_dict(&self, dict: &Dict) -> u64 {
+        let mut tx = self.begin().await.unwrap();
         query!(
             "INSERT OR REPLACE INTO dict VALUES (?,?)",
             dict.word,
             dict.read_word
         )
-        .execute(self)
+        .execute(&mut tx)
         .await
         .map_or(0, |result| result.rows_affected())
     }
     async fn get_dict(&self, word: &str) -> Result<String> {
+        let mut tx = self.begin().await.unwrap();
         Ok(query!("SELECT read_word FROM dict WHERE word = ?", word)
-            .fetch_optional(self)
+            .fetch_optional(&mut tx)
             .await?
             .ok_or(anyhow!("key not found"))?
             .read_word)
     }
     async fn get_dict_all(&self) -> Vec<Dict> {
+        let mut tx = self.begin().await.unwrap();
         sqlx::query_as!(Dict, "SELECT word,read_word FROM dict")
-            .fetch_all(self)
+            .fetch_all(&mut tx)
             .await
             .unwrap()
     }
     async fn remove(&self, word: &str) -> Result<()> {
+        let mut tx = self.begin().await.unwrap();
         sqlx::query!("DELETE FROM dict WHERE word = ?", word)
-            .execute(self)
+            .execute(&mut tx)
             .await
             .map_err(|e| e.into())
             .map(|_| ())
+        //tx.commit().await
     }
 }
 
@@ -117,16 +119,18 @@ pub trait SpeakerDB {
     async fn speaker_name_to_id(&self, name: &str) -> Result<(Generators, u8)>;
     async fn speaker_id_to_name(&self, generator_type: Generators, id: u8) -> Result<String>;
     async fn generate_speaker_db(&self) -> Result<()>;
+    async fn get_speaker(&self,id:usize) -> Result<VoiceType>;
 }
 
 #[async_trait]
 impl SpeakerDB for sqlx::SqlitePool {
     async fn speaker_name_to_id(&self, name: &str) -> Result<(Generators, u8)> {
+        let mut tx = self.begin().await.unwrap();
         let q = query!(
             "SELECT generator_type,style_id FROM speakers WHERE style_name = ?",
             name
         )
-        .fetch_one(self)
+        .fetch_one(&mut tx)
         .await?;
         Ok((
             Generators::try_from(q.generator_type.as_str())?,
@@ -134,18 +138,31 @@ impl SpeakerDB for sqlx::SqlitePool {
         ))
     }
     async fn speaker_id_to_name(&self, generator_type: Generators, id: u8) -> Result<String> {
+        let mut tx = self.begin().await.unwrap();
         let str: &str = generator_type.into();
         let q = query!(
             "SELECT name,style_name FROM speakers WHERE generator_type = ? AND style_id = ?",
             str,
             id
         )
-        .fetch_one(self)
+        .fetch_one(&mut tx)
         .await?;
         Ok(format!("{} {}", q.name, q.style_name))
     }
     async fn generate_speaker_db(&self) -> Result<()> {
         dotenv::dotenv().ok();
+        #[derive(Deserialize, Clone)]
+        struct Style {
+            pub name: String,
+            pub id: u8,
+        }
+        #[derive(Deserialize, Clone)]
+        struct Speaker {
+            pub name: String,
+            pub styles: Vec<Style>,
+        }
+
+        let mut tx = self.begin().await.unwrap();
         let voicevox_voice_types: Vec<Speaker> = {
             let base_url =
                 std::env::var("BASE_URL_VOICEVOX").expect("environment variable not found");
@@ -167,7 +184,7 @@ impl SpeakerDB for sqlx::SqlitePool {
                     "VOICEVOX",
                     style.id
                 )
-                .fetch_optional(self)
+                .fetch_optional(&mut tx)
                 .await?
                 {
                     query!(
@@ -177,7 +194,7 @@ impl SpeakerDB for sqlx::SqlitePool {
                         style.name,
                         "VOICEVOX"
                     )
-                    .execute(self)
+                    .execute(&mut tx)
                     .await
                     .unwrap();
                 }
@@ -202,7 +219,7 @@ impl SpeakerDB for sqlx::SqlitePool {
                     "COEIROINK",
                     style.id
                 )
-                .fetch_optional(self)
+                .fetch_optional(&mut tx)
                 .await?
                 {
                     query!(
@@ -212,7 +229,7 @@ impl SpeakerDB for sqlx::SqlitePool {
                         style.name,
                         "COEIROINK"
                     )
-                    .execute(self)
+                    .execute(&mut tx)
                     .await
                     .unwrap();
                 }
@@ -220,5 +237,8 @@ impl SpeakerDB for sqlx::SqlitePool {
         }
         Ok(())
     }
-    
+    async fn get_speaker(&self,id:usize) -> Result<VoiceType> {
+        let id = id as i64;
+        query_as!(VoiceType,"SELECT * FROM speakers WHERE id = ?",id).fetch_one(self).await.map_err(|e| e.into())
+    }
 }
