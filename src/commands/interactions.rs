@@ -40,7 +40,7 @@ pub async fn interaction_create_with_text(
                     word: before.to_string(),
                     read_word: after.to_string(),
                 };
-                handler.database.update_dict(&dict).await;
+                handler.database.update_dict(&dict).await?;
                 Ok(SlashCommandTextResult::from_str_and_flags(
                     &format!("これからは、{} を {} って読むね", before, after),
                     true,
@@ -51,7 +51,7 @@ pub async fn interaction_create_with_text(
             }
         }
         "rem" => {
-            let word = get_argument(&command, 0).unwrap();
+            let word = get_argument(&command, 0)?;
             if let ArgumentValue::String(word) = word {
                 if let Ok(_) = handler.database.remove(word).await {
                     Ok(SlashCommandTextResult::from_str(&format!(
@@ -76,9 +76,9 @@ pub async fn interaction_create_with_text(
             if let ArgumentValue::String(greet) = greet {
                 let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
 
-                let mut user_config = handler.database.get_user_config_or_default(user_id).await.unwrap();
+                let mut user_config = handler.database.get_user_config_or_default(user_id).await?;
                 user_config.hello = greet.to_string();
-                handler.database.update_user_config(&user_config).await;
+                handler.database.update_user_config(&user_config).await?;
                 Ok(SlashCommandTextResult::from_str(&format!(
                     "{}さん、これから{}ってあいさつするね",
                     get_display_name(&command),
@@ -92,9 +92,9 @@ pub async fn interaction_create_with_text(
             let greet = get_argument(command, 0)?;
             if let ArgumentValue::String(greet) = greet {
                 let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
-                let mut user_config = handler.database.get_user_config_or_default(user_id).await.unwrap();
+                let mut user_config = handler.database.get_user_config_or_default(user_id).await?;
                 user_config.bye = greet.to_string();
-                handler.database.update_user_config(&user_config).await;
+                handler.database.update_user_config(&user_config).await?;
                 Ok(SlashCommandTextResult::from_str(&format!(
                     "{}さん、これから{}ってあいさつするね",
                     get_display_name(&command),
@@ -108,10 +108,10 @@ pub async fn interaction_create_with_text(
             let nickname = get_argument(command, 0)?;
             if let ArgumentValue::String(nickname) = nickname {
                 let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
-                let mut user_config = handler.database.get_user_config_or_default(user_id).await.unwrap();
+                let mut user_config = handler.database.get_user_config_or_default(user_id).await?;
                 user_config.read_nickname = Some(nickname.to_string());
                 tracing::info!("{:?}", user_config);
-                handler.database.update_user_config(&user_config).await;
+                handler.database.update_user_config(&user_config).await?;
                 Ok(SlashCommandTextResult::from_str(&format!(
                     "{}さん、これからは{}って呼ぶね",
                     get_display_name(&command),

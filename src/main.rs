@@ -80,7 +80,8 @@ async fn main() {
         .connect_with(
             sqlx::sqlite::SqliteConnectOptions::new()
                 .filename("database.sqlite")
-                .create_if_missing(true).shared_cache(true)
+                .create_if_missing(true)
+                .shared_cache(true),
         )
         .await
         .expect("Couldn't connect to database");

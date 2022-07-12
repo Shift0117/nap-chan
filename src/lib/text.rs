@@ -196,7 +196,6 @@ fn emoji_test() {
 
 #[test]
 fn code_block_test() {
-    let text = "aaa ``` test ``` bbb"
-        .to_string();
+    let text = "aaa ``` test ``` bbb".to_string();
     assert_eq!("aaa  bbb", text.remove_code_block());
 }

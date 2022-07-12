@@ -1,12 +1,6 @@
-use std::{
-    fs::{self, File},
-    io::Write,
-};
-
 use serde::Deserialize;
 use serenity::async_trait;
-use sqlx::{query, query_as, Acquire};
-use tracing::info;
+use sqlx::{query, query_as};
 
 use crate::{handler::Generators, Dict};
 use anyhow::{anyhow, Result};
@@ -53,7 +47,7 @@ impl UserConfigDB for sqlx::SqlitePool {
     }
     async fn get_user_config_or_default(&self, user_id: i64) -> Result<UserConfig> {
         let mut tx = self.begin().await?;
-        
+
         let res = match self.get_user_config(user_id).await {
             Ok(q) => Ok(q),
             Err(_) => {
@@ -61,7 +55,13 @@ impl UserConfigDB for sqlx::SqlitePool {
                     .execute(&mut tx)
                     .await
                     .ok();
-                Ok(query_as!(UserConfig,"SELECT * FROM user_config WHERE user_id = ?",user_id).fetch_one(&mut tx).await?)
+                Ok(query_as!(
+                    UserConfig,
+                    "SELECT * FROM user_config WHERE user_id = ?",
+                    user_id
+                )
+                .fetch_one(&mut tx)
+                .await?)
             }
         };
         tx.commit().await?;
@@ -267,7 +267,9 @@ impl SpeakerDB for sqlx::SqlitePool {
     }
     async fn get_all_speakers(&self) -> Result<Vec<VoiceType>> {
         let mut tx = self.begin().await?;
-        let q = query_as!(VoiceType,"SELECT * FROM speakers").fetch_all(&mut tx).await?;
+        let q = query_as!(VoiceType, "SELECT * FROM speakers")
+            .fetch_all(&mut tx)
+            .await?;
         tx.commit().await?;
         Ok(q)
     }

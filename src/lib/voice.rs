@@ -1,11 +1,4 @@
-use once_cell::sync::Lazy;
-use std::{
-    collections::HashMap,
-    convert::TryInto,
-    fs::{self, File},
-    io::Write,
-    sync::RwLock,
-};
+use std::{convert::TryInto, fs::File, io::Write};
 
 use reqwest;
 use serenity::{
@@ -18,10 +11,7 @@ use tracing::info;
 
 use crate::handler::{Generators, Handler};
 
-use super::{
-    db::{ UserConfigDB},
-    text::TextMessage,
-};
+use super::{db::UserConfigDB, text::TextMessage};
 
 #[derive(Hash)]
 pub struct SpeakerId {
@@ -68,7 +58,11 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
         cleaned_content
     );
 
-    let user_config = handler.database.get_user_config_or_default(user_id).await.unwrap();
+    let user_config = handler
+        .database
+        .get_user_config_or_default(user_id)
+        .await
+        .unwrap();
 
     let voice_type = user_config.voice_type.try_into().unwrap();
     let generator_type = user_config.generator_type.try_into().unwrap();

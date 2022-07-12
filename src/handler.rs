@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use serde::Deserialize;
+
 use serenity::{
     async_trait,
     builder::CreateSelectMenu,
@@ -9,7 +9,7 @@ use serenity::{
         id::GuildId,
         interactions::{
             application_command::{
-                self, ApplicationCommandInteraction, ApplicationCommandInteractionDataOptionValue,
+                ApplicationCommandInteraction, ApplicationCommandInteractionDataOptionValue,
             },
             message_component::ComponentType,
             Interaction, InteractionResponseType,
@@ -34,7 +34,7 @@ use crate::{
         meta, util,
     },
     lib::{
-        db::{DictDB, UserConfigDB,SpeakerDB, VoiceType},
+        db::{SpeakerDB, UserConfigDB},
         text::TextMessage,
         voice::{play_raw_voice, play_voice},
     },
@@ -65,7 +65,7 @@ impl TryFrom<u8> for Generators {
         match value {
             0 => Ok(Self::COEIROINK),
             1 => Ok(Self::VOICEVOX),
-            _ => Err(anyhow!("no such generator_type"))
+            _ => Err(anyhow!("no such generator_type")),
         }
     }
 }
@@ -281,7 +281,7 @@ impl EventHandler for Handler {
         let read_channel_id = self.read_channel_id.lock().await.clone();
         info!("msg = {:?}", &msg);
         if read_channel_id == Some(text_channel_id) {
-            if let Some(voice_channel_id) = voice_channel_id {
+            if let Some(_voice_channel_id) = voice_channel_id {
                 if msg.author.id != bot_id {
                     play_voice(&ctx, msg, self).await;
                 };
@@ -322,7 +322,8 @@ impl EventHandler for Handler {
                             let user_config = self
                                 .database
                                 .get_user_config_or_default(user_id as i64)
-                                .await.unwrap();
+                                .await
+                                .unwrap();
                             let voice_type =
                                 content.voice_type.unwrap_or(user_config.voice_type as u8);
                             let generator_type = content
@@ -341,22 +342,38 @@ impl EventHandler for Handler {
                 }
                 "info" => {
                     let user_id = command.user.id.0 as i64;
-                    let user_config = self.database.get_user_config_or_default(user_id).await.unwrap();
-                    let voice_name = self.database.speaker_id_to_name((user_config.generator_type as u8).try_into().unwrap(), user_config.voice_type as u8).await.unwrap();
+                    let user_config = self
+                        .database
+                        .get_user_config_or_default(user_id)
+                        .await
+                        .unwrap();
+                    let voice_name = self
+                        .database
+                        .speaker_id_to_name(
+                            (user_config.generator_type as u8).try_into().unwrap(),
+                            user_config.voice_type as u8,
+                        )
+                        .await
+                        .unwrap();
                     command
                         .create_interaction_response(&ctx.http, |response| {
                             response
                                 .kind(InteractionResponseType::ChannelMessageWithSource)
                                 .interaction_response_data(|msg| {
                                     msg.create_embed(|emb| {
-                                        emb.fields([(
-                                            "nickname",
-                                            user_config
-                                                .read_nickname
-                                                .as_ref()
-                                                .unwrap_or(&get_display_name(&command)),
-                                            true,
-                                        ),("voice",&voice_name,true),("hello",&user_config.hello,true),("bye",&user_config.bye,true)])
+                                        emb.fields([
+                                            (
+                                                "nickname",
+                                                user_config
+                                                    .read_nickname
+                                                    .as_ref()
+                                                    .unwrap_or(&get_display_name(&command)),
+                                                true,
+                                            ),
+                                            ("voice", &voice_name, true),
+                                            ("hello", &user_config.hello, true),
+                                            ("bye", &user_config.bye, true),
+                                        ])
                                     })
                                 })
                         })
@@ -364,9 +381,6 @@ impl EventHandler for Handler {
                         .ok();
                 }
                 "set_voice_type" => {
-                    
-
-                    
                     let speakers = self.database.get_all_speakers().await.unwrap();
                     let generators = ["COEIROINK", "VOICEVOX"];
                     let menus = generators.iter().map(|gen| {
@@ -382,29 +396,30 @@ impl EventHandler for Handler {
                                     });
                                 }
                                 os
-                            }).custom_id(gen)
+                            })
+                            .custom_id(gen)
                             .clone()
                     });
-                    let _ = command.create_interaction_response(&ctx.http, |response| {
-                        response
-                            .kind(InteractionResponseType::ChannelMessageWithSource)
-                            .interaction_response_data(|msg| {
-                                msg.components(|c| {
-                                    for menu in menus {
-                                        c.create_action_row(|row| {
-                                            row.add_select_menu(menu)
-                                        });
-                                    }
-                                    c
+                    let _ = command
+                        .create_interaction_response(&ctx.http, |response| {
+                            response
+                                .kind(InteractionResponseType::ChannelMessageWithSource)
+                                .interaction_response_data(|msg| {
+                                    msg.components(|c| {
+                                        for menu in menus {
+                                            c.create_action_row(|row| row.add_select_menu(menu));
+                                        }
+                                        c
+                                    })
                                 })
-                            })
-                    }).await;
+                        })
+                        .await;
                     return;
                 }
                 "walpha" => {
                     let input = get_argument(&command, 0).unwrap();
                     if let ArgumentValue::String(input) = input {
-                        let res = command
+                        let _res = command
                             .create_interaction_response(&ctx.http, |res| {
                                 res.kind(InteractionResponseType::ChannelMessageWithSource)
                                     .interaction_response_data(|msg| {
@@ -426,7 +441,7 @@ impl EventHandler for Handler {
         } else if let Interaction::MessageComponent(msg) = interaction {
             if let ComponentType::SelectMenu = msg.data.component_type {
                 info!("{:?}", msg.data.values);
-                let id:i64 = msg.data.values[0].parse().unwrap();
+                let id: i64 = msg.data.values[0].parse().unwrap();
                 let q = self.database.get_speaker(id as usize).await.unwrap();
                 let generator_type = q.generator_type;
                 let style_id = q.style_id;
@@ -434,10 +449,15 @@ impl EventHandler for Handler {
                 let mut user_config = self
                     .database
                     .get_user_config_or_default(user_id as i64)
-                    .await.unwrap();
-                user_config.generator_type = Generators::try_from(generator_type.as_str()).unwrap() as i64;
+                    .await
+                    .unwrap();
+                user_config.generator_type =
+                    Generators::try_from(generator_type.as_str()).unwrap() as i64;
                 user_config.voice_type = style_id;
-                self.database.update_user_config(&user_config).await.unwrap();
+                self.database
+                    .update_user_config(&user_config)
+                    .await
+                    .unwrap();
                 let res = msg
                     .create_interaction_response(&ctx.http, |res| {
                         res.kind(InteractionResponseType::UpdateMessage)
@@ -447,5 +467,4 @@ impl EventHandler for Handler {
             }
         }
     }
-
 }
