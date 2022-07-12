@@ -8,8 +8,7 @@ nakochan https://github.com/niuez/nakochan のような discord の読み上げ 
 
 1. COEIROINK の `run.exe` を実行します
 2. .env.sample に従って .env に bot の token,application id,COEIROINK が動いているアドレス(デフォルトはおそらく http://127.0.0.1:50031 )を入力します
-3. 使いたいサーバーで `>register` を入力します
-4. 再起動すると slash command が有効化されます
+
 
 
 # 機能
