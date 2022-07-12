@@ -39,3 +39,7 @@ pub async fn rand_member(command: &Command, ctx: &Context) -> Result<Member> {
         .await
         .ok_or(anyhow!("member not found"))
 }
+
+pub async fn help() {
+    
+}

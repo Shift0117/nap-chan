@@ -130,39 +130,8 @@ impl Handler {}
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
-        let guilds_file = if let Ok(file) = File::open(GUILD_IDS_PATH) {
-            file
-        } else {
-            let mut tmp = OpenOptions::new()
-                .create(true)
-                .read(true)
-                .write(true)
-                .open(GUILD_IDS_PATH)
-                .expect("File creation error");
-            tmp.write_all("[]".as_bytes()).ok();
-            tmp.seek(std::io::SeekFrom::Start(0)).ok();
-            tmp
-        };
-        let reader = std::io::BufReader::new(guilds_file);
-        let guild_ids: HashSet<GuildId> =
-            serde_json::from_reader(reader).expect("JSON parse error");
-        tracing::info!("{:?}", &guild_ids);
 
-        /*let old_global_commands = ctx.http.get_global_application_commands().await.unwrap();
-        for command in old_global_commands {
-            dbg!(command.name);
-            ctx.http.delete_global_application_command(command.id.0).await;
-        }*/
-        for guild_id in guild_ids {
-            /*let old_commands = guild_id.get_application_commands(&ctx.http).await.unwrap();
-            for command in old_commands {
-                dbg!(command.name);
-                guild_id
-                    .delete_application_command(&ctx.http, command.id)
-                    .await
-                    .ok();
-            }*/
-            let commands = definition::set_application_commands(&guild_id, &ctx.http).await;
+        let commands = definition::set_application_commands(&ctx.http).await;
             match commands {
                 Ok(commands) => {
                     for c in commands {
@@ -173,7 +142,12 @@ impl EventHandler for Handler {
                     tracing::info!("{}", e.to_string())
                 }
             }
-        }
+        /*let old_global_commands = ctx.http.get_global_application_commands().await.unwrap();
+        for command in old_global_commands {
+            dbg!(command.name);
+            ctx.http.delete_global_application_command(command.id.0).await;
+        }*/
+
         tracing::info!("{} is connected!", ready.user.name);
     }
     async fn voice_state_update(
