@@ -39,6 +39,7 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
         .database
         .get_user_config_or_default(user_id)
         .await
+        .unwrap()
         .read_nickname
         .unwrap_or(
             msg.member
@@ -67,7 +68,7 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) {
         cleaned_content
     );
 
-    let user_config = handler.database.get_user_config_or_default(user_id).await;
+    let user_config = handler.database.get_user_config_or_default(user_id).await.unwrap();
 
     let voice_type = user_config.voice_type.try_into().unwrap();
     let generator_type = user_config.generator_type.try_into().unwrap();

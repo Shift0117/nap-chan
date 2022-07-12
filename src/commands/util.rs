@@ -22,6 +22,7 @@ pub async fn simple_wolfram_alpha(input: &str) -> Result<String> {
     Ok(path)
 }
 
+
 pub async fn rand_member(command: &Command, ctx: &Context) -> Result<Member> {
     let guild_id = command.guild_id.ok_or(anyhow!("guild does not exist"))?;
     let guild = ctx

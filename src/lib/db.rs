@@ -13,9 +13,9 @@ use anyhow::{anyhow, Result};
 
 #[async_trait]
 pub trait UserConfigDB {
-    async fn get_user_config_or_default(&self, user_id: i64) -> UserConfig;
+    async fn get_user_config_or_default(&self, user_id: i64) -> Result<UserConfig>;
     async fn get_user_config(&self, user_id: i64) -> Result<UserConfig>;
-    async fn update_user_config(&self, user_config: &UserConfig) -> u64;
+    async fn update_user_config(&self, user_config: &UserConfig) -> Result<u64>;
 }
 
 #[derive(Debug)]
@@ -39,78 +39,92 @@ pub struct VoiceType {
 #[async_trait]
 impl UserConfigDB for sqlx::SqlitePool {
     async fn get_user_config(&self, user_id: i64) -> Result<UserConfig> {
-        query_as!(
+        let mut tx = self.begin().await?;
+        let q = query_as!(
             UserConfig,
             "SELECT * FROM user_config WHERE user_id = ?",
             user_id
         )
-        .fetch_optional(self)
+        .fetch_optional(&mut tx)
         .await?
-        .ok_or(anyhow!("key not found"))
+        .ok_or(anyhow!("key not found"))?;
+        tx.commit().await?;
+        Ok(q)
     }
-    async fn get_user_config_or_default(&self, user_id: i64) -> UserConfig {
-        match self.get_user_config(user_id).await {
-            Ok(q) => q,
+    async fn get_user_config_or_default(&self, user_id: i64) -> Result<UserConfig> {
+        let mut tx = self.begin().await?;
+        
+        let res = match self.get_user_config(user_id).await {
+            Ok(q) => Ok(q),
             Err(_) => {
                 query!("INSERT INTO user_config (user_id) VALUES (?)", user_id)
-                    .execute(self)
+                    .execute(&mut tx)
                     .await
                     .ok();
-                self.get_user_config(user_id).await.unwrap()
+                Ok(query_as!(UserConfig,"SELECT * FROM user_config WHERE user_id = ?",user_id).fetch_one(&mut tx).await?)
             }
-        }
+        };
+        tx.commit().await?;
+        res
     }
-    async fn update_user_config(&self, user_config: &UserConfig) -> u64 {
-        query!("UPDATE user_config SET hello = ?,bye = ?,voice_type = ?,generator_type = ?,read_nickname = ? WHERE user_id = ?",
+    async fn update_user_config(&self, user_config: &UserConfig) -> Result<u64> {
+        let mut tx = self.begin().await?;
+        let q = query!("UPDATE user_config SET hello = ?,bye = ?,voice_type = ?,generator_type = ?,read_nickname = ? WHERE user_id = ?",
         user_config.hello,user_config.bye,user_config.voice_type,user_config.generator_type,user_config.read_nickname,user_config.user_id)
-        .execute(self).await.map_or(0, |result| result.rows_affected())
+        .execute(&mut tx).await?;
+        tx.commit().await?;
+        Ok(q.rows_affected())
     }
 }
 
 #[async_trait]
 pub trait DictDB {
-    async fn update_dict(&self, dict: &Dict) -> u64;
+    async fn update_dict(&self, dict: &Dict) -> Result<u64>;
     async fn get_dict(&self, word: &str) -> Result<String>;
-    async fn get_dict_all(&self) -> Vec<Dict>;
+    async fn get_dict_all(&self) -> Result<Vec<Dict>>;
     async fn remove(&self, word: &str) -> Result<()>;
 }
 
 #[async_trait]
 impl DictDB for sqlx::SqlitePool {
-    async fn update_dict(&self, dict: &Dict) -> u64 {
-        let mut tx = self.begin().await.unwrap();
-        query!(
+    async fn update_dict(&self, dict: &Dict) -> Result<u64> {
+        let mut tx = self.begin().await?;
+        let q = query!(
             "INSERT OR REPLACE INTO dict VALUES (?,?)",
             dict.word,
             dict.read_word
         )
         .execute(&mut tx)
         .await
-        .map_or(0, |result| result.rows_affected())
+        .map_or(0, |result| result.rows_affected());
+        tx.commit().await?;
+        Ok(q)
     }
     async fn get_dict(&self, word: &str) -> Result<String> {
-        let mut tx = self.begin().await.unwrap();
-        Ok(query!("SELECT read_word FROM dict WHERE word = ?", word)
+        let mut tx = self.begin().await?;
+        let dict = query!("SELECT read_word FROM dict WHERE word = ?", word)
             .fetch_optional(&mut tx)
             .await?
             .ok_or(anyhow!("key not found"))?
-            .read_word)
+            .read_word;
+        tx.commit().await?;
+        Ok(dict)
     }
-    async fn get_dict_all(&self) -> Vec<Dict> {
-        let mut tx = self.begin().await.unwrap();
-        sqlx::query_as!(Dict, "SELECT word,read_word FROM dict")
+    async fn get_dict_all(&self) -> Result<Vec<Dict>> {
+        let mut tx = self.begin().await?;
+        let dict = sqlx::query_as!(Dict, "SELECT word,read_word FROM dict")
             .fetch_all(&mut tx)
-            .await
-            .unwrap()
+            .await?;
+        tx.commit().await?;
+        Ok(dict)
     }
     async fn remove(&self, word: &str) -> Result<()> {
         let mut tx = self.begin().await.unwrap();
         sqlx::query!("DELETE FROM dict WHERE word = ?", word)
             .execute(&mut tx)
-            .await
-            .map_err(|e| e.into())
-            .map(|_| ())
-        //tx.commit().await
+            .await?;
+        tx.commit().await?;
+        Ok(())
     }
 }
 
@@ -119,7 +133,8 @@ pub trait SpeakerDB {
     async fn speaker_name_to_id(&self, name: &str) -> Result<(Generators, u8)>;
     async fn speaker_id_to_name(&self, generator_type: Generators, id: u8) -> Result<String>;
     async fn generate_speaker_db(&self) -> Result<()>;
-    async fn get_speaker(&self,id:usize) -> Result<VoiceType>;
+    async fn get_speaker(&self, id: usize) -> Result<VoiceType>;
+    async fn get_all_speakers(&self) -> Result<Vec<VoiceType>>;
 }
 
 #[async_trait]
@@ -132,6 +147,7 @@ impl SpeakerDB for sqlx::SqlitePool {
         )
         .fetch_one(&mut tx)
         .await?;
+        tx.commit().await?;
         Ok((
             Generators::try_from(q.generator_type.as_str())?,
             q.style_id as u8,
@@ -147,6 +163,7 @@ impl SpeakerDB for sqlx::SqlitePool {
         )
         .fetch_one(&mut tx)
         .await?;
+        tx.commit().await?;
         Ok(format!("{} {}", q.name, q.style_name))
     }
     async fn generate_speaker_db(&self) -> Result<()> {
@@ -235,10 +252,23 @@ impl SpeakerDB for sqlx::SqlitePool {
                 }
             }
         }
+        tx.commit().await?;
         Ok(())
     }
-    async fn get_speaker(&self,id:usize) -> Result<VoiceType> {
+    async fn get_speaker(&self, id: usize) -> Result<VoiceType> {
         let id = id as i64;
-        query_as!(VoiceType,"SELECT * FROM speakers WHERE id = ?",id).fetch_one(self).await.map_err(|e| e.into())
+        let mut tx = self.begin().await?;
+        let q = query_as!(VoiceType, "SELECT * FROM speakers WHERE id = ?", id)
+            .fetch_one(&mut tx)
+            .await?;
+        tx.commit().await?;
+
+        Ok(q)
+    }
+    async fn get_all_speakers(&self) -> Result<Vec<VoiceType>> {
+        let mut tx = self.begin().await?;
+        let q = query_as!(VoiceType,"SELECT * FROM speakers").fetch_all(&mut tx).await?;
+        tx.commit().await?;
+        Ok(q)
     }
 }

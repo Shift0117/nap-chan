@@ -17,7 +17,6 @@ use serenity::{
         prelude::{Ready, VoiceState},
     },
 };
-use sqlx::query;
 use std::{
     collections::HashSet,
     convert::TryInto,
@@ -247,7 +246,7 @@ impl EventHandler for Handler {
             //info!("greeting_type = {}", greeting_type);
             let uid = user_id.0 as i64;
 
-            let user_config = self.database.get_user_config_or_default(uid).await;
+            let user_config = self.database.get_user_config_or_default(uid).await.unwrap();
             let nickname = user_config.read_nickname.unwrap_or(user_name.to_string());
             let greet_text = match greeting_type {
                 0 => user_config.hello,
@@ -323,7 +322,7 @@ impl EventHandler for Handler {
                             let user_config = self
                                 .database
                                 .get_user_config_or_default(user_id as i64)
-                                .await;
+                                .await.unwrap();
                             let voice_type =
                                 content.voice_type.unwrap_or(user_config.voice_type as u8);
                             let generator_type = content
@@ -342,8 +341,7 @@ impl EventHandler for Handler {
                 }
                 "info" => {
                     let user_id = command.user.id.0 as i64;
-                    let user_config = self.database.get_user_config_or_default(user_id).await;
-
+                    let user_config = self.database.get_user_config_or_default(user_id).await.unwrap();
                     let voice_name = self.database.speaker_id_to_name((user_config.generator_type as u8).try_into().unwrap(), user_config.voice_type as u8).await.unwrap();
                     command
                         .create_interaction_response(&ctx.http, |response| {
@@ -367,11 +365,9 @@ impl EventHandler for Handler {
                 }
                 "set_voice_type" => {
                     
+
                     
-                    let speakers = sqlx::query_as!(VoiceType, "SELECT * FROM speakers")
-                        .fetch_all(&self.database)
-                        .await
-                        .unwrap();
+                    let speakers = self.database.get_all_speakers().await.unwrap();
                     let generators = ["COEIROINK", "VOICEVOX"];
                     let menus = generators.iter().map(|gen| {
                         CreateSelectMenu::default()
@@ -431,17 +427,17 @@ impl EventHandler for Handler {
             if let ComponentType::SelectMenu = msg.data.component_type {
                 info!("{:?}", msg.data.values);
                 let id:i64 = msg.data.values[0].parse().unwrap();
-                let q = query!("SELECT generator_type,style_id FROM speakers WHERE id = ?",id).fetch_one(&self.database).await.unwrap();
+                let q = self.database.get_speaker(id as usize).await.unwrap();
                 let generator_type = q.generator_type;
                 let style_id = q.style_id;
                 let user_id = msg.user.id.0;
                 let mut user_config = self
                     .database
                     .get_user_config_or_default(user_id as i64)
-                    .await;
+                    .await.unwrap();
                 user_config.generator_type = Generators::try_from(generator_type.as_str()).unwrap() as i64;
                 user_config.voice_type = style_id;
-                self.database.update_user_config(&user_config).await;
+                self.database.update_user_config(&user_config).await.unwrap();
                 let res = msg
                     .create_interaction_response(&ctx.http, |res| {
                         res.kind(InteractionResponseType::UpdateMessage)
@@ -451,4 +447,5 @@ impl EventHandler for Handler {
             }
         }
     }
+
 }
