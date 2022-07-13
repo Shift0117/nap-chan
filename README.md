@@ -8,8 +8,7 @@ nakochan https://github.com/niuez/nakochan のような discord の読み上げ 
 
 1. COEIROINK の `run.exe` を実行します
 2. .env.sample に従って .env に bot の token,application id,COEIROINK が動いているアドレス(デフォルトはおそらく http://127.0.0.1:50031 )を入力します
-3. 使いたいサーバーで `>register` を入力します
-4. 再起動すると slash command が有効化されます
+
 
 
 # 機能
@@ -17,9 +16,12 @@ nakochan https://github.com/niuez/nakochan のような discord の読み上げ 
 - コマンド
   - `/join` コマンドを入力した人が入っているボイスチャンネルに合流します
   - `/leave` 入っているボイスチャンネルから抜けます
-  - `/mute` / `/unmute` それぞれ bot をミュート/ミュート解除します
+  - `/mute` , `/unmute` それぞれ bot をミュート/ミュート解除します
   - `/add before after` before を after と読むようにします
   - `/rem word` /add コマンドで登録した word の読み方をリセットします
   - `/hello greet` コマンドを入力した人が入室したときのあいさつを greet に変更します
   - `/set_voice_type` 読み上げボイスタイプを変更する Select menu を表示します
-  - 
+  - `/info` 現在のユーザー設定を表示します
+  - `/rand_member` VC 内のランダムなメンバーを指定します
+  - `/set_nickname` 呼ぶ名前を設定します
+  - `/walpha` 計算などをしてくれます
