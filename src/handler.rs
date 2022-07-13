@@ -130,18 +130,17 @@ impl Handler {}
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: Ready) {
-
         let commands = definition::set_application_commands(&ctx.http).await;
-            match commands {
-                Ok(commands) => {
-                    for c in commands {
-                        tracing::info!("{:?}", c);
-                    }
-                }
-                Err(e) => {
-                    tracing::info!("{}", e.to_string())
+        match commands {
+            Ok(commands) => {
+                for c in commands {
+                    tracing::info!("{:?}", c);
                 }
             }
+            Err(e) => {
+                tracing::info!("{}", e.to_string())
+            }
+        }
         /*let old_global_commands = ctx.http.get_global_application_commands().await.unwrap();
         for command in old_global_commands {
             dbg!(command.name);
@@ -409,6 +408,9 @@ impl EventHandler for Handler {
                                 .await;
                         };
                     }
+                },
+                "help" => {
+                    util::help(&ctx.http, &command).await.unwrap();
                 }
                 _ => (),
             };

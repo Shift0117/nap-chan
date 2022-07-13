@@ -6,9 +6,7 @@ use serenity::{
         interactions::application_command::{self, ApplicationCommand},
     },
 };
-pub async fn set_application_commands(
-    http: &Http,
-) -> Result<Vec<ApplicationCommand>> {
+pub async fn set_application_commands(http: &Http) -> Result<Vec<ApplicationCommand>> {
     let v = ApplicationCommand::set_global_application_commands(http, |commands| {
         commands
             .create_application_command(|command| {
@@ -88,7 +86,7 @@ pub async fn set_application_commands(
             .create_application_command(|command| {
                 command
                     .name("set_nickname")
-                    .description("呼ぶ名前を設定します。")
+                    .description("呼ぶ名前を設定します")
                     .create_option(|option| {
                         option
                             .kind(application_command::ApplicationCommandOptionType::String)
@@ -116,8 +114,11 @@ pub async fn set_application_commands(
             })
             .create_application_command(|command| {
                 command.name("info").description("設定を表示します")
+            }).create_application_command(|command|{
+                command.name("help").description("ヘルプです")
             })
-    }).await?;
+    })
+    .await?;
     Ok(v)
     // GuildId::set_application_commands(&guild_id, http, |commands| {
     //     commands

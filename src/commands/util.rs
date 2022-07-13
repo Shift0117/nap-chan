@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use serenity::{client::Context, model::guild::Member};
+use serenity::{client::Context, http::Http, model::guild::Member};
 use std::io::Write;
 
 use crate::handler::Command;
@@ -40,6 +40,19 @@ pub async fn rand_member(command: &Command, ctx: &Context) -> Result<Member> {
         .ok_or(anyhow!("member not found"))
 }
 
-pub async fn help() {
-    
+pub async fn help(http: &Http, command: &Command) -> Result<()> {
+    let global_commands = http.get_global_application_commands().await?;
+    let embed_fields = global_commands.iter().map(|global_command| {
+        (&global_command.name,&global_command.description,true)
+    }).collect::<Vec<_>>();
+
+    command.create_interaction_response(http, |response| {
+        response.interaction_response_data(|data| {
+            data.create_embed(|emb| {
+                emb.fields(embed_fields)
+            })
+        })
+    }).await?;
+    Ok(())
 }
+
