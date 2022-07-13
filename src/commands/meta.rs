@@ -56,9 +56,7 @@ pub async fn leave(ctx: &Context, guild_id: GuildId) -> Result<()> {
         .clone();
     let has_handler = manager.get(guild_id).is_some();
     if has_handler {
-        manager
-            .remove(guild_id)
-            .await?;
+        manager.remove(guild_id).await?;
         Ok(())
     } else {
         Err(anyhow!("ボイスチャンネルに入ってないよ"))
