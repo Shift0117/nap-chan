@@ -224,14 +224,17 @@ impl EventHandler for Handler {
                 .make_read_text(&self.database)
                 .await;
             let voice_type = user_config.voice_type.try_into().unwrap();
-            play_raw_voice(
+            if let Err(e) = play_raw_voice(
                 &ctx,
                 &text,
                 voice_type,
                 user_config.generator_type.try_into().unwrap(),
                 guild_id?,
             )
-            .await;
+            .await
+            {
+                info!("{}", e);
+            };
 
             Some(())
         }
@@ -250,7 +253,9 @@ impl EventHandler for Handler {
         if read_channel_id == Some(text_channel_id) {
             if let Some(_voice_channel_id) = voice_channel_id {
                 if msg.author.id != bot_id {
-                    play_voice(&ctx, msg, self).await;
+                    if let Err(e) = play_voice(&ctx, msg, self).await {
+                        info!("{}", e)
+                    };
                 };
             }
         }
@@ -297,14 +302,17 @@ impl EventHandler for Handler {
                             let generator_type = content
                                 .generator_type
                                 .unwrap_or(user_config.generator_type as u8);
-                            play_raw_voice(
+                            if let Err(e) = play_raw_voice(
                                 &ctx,
                                 &msg,
                                 voice_type,
                                 generator_type,
                                 command.guild_id.unwrap(),
                             )
-                            .await;
+                            .await
+                            {
+                                info!("{}", e);
+                            };
                         }
                     }
                 }
