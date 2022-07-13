@@ -33,7 +33,7 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) -> Resul
         .unwrap_or(
             msg.member
                 .as_ref()
-                .expect("member not found")
+                .ok_or(anyhow!("member not found"))?
                 .nick
                 .as_ref()
                 .unwrap_or(&msg.author.name)
@@ -77,7 +77,9 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) -> Resul
     let (_, path) = temp_file.keep()?;
     let manager = songbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .ok_or(anyhow!(
+            "Songbird Voice client placed in at initialisation."
+        ))?
         .clone();
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;
@@ -133,7 +135,9 @@ pub async fn play_raw_voice(
     let (_, path) = temp_file.keep()?;
     let manager = songbird::get(ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .ok_or(anyhow!(
+            "Songbird Voice client placed in at initialisation."
+        ))?
         .clone();
     if let Some(handler_lock) = manager.get(guild_id) {
         let mut handler = handler_lock.lock().await;
