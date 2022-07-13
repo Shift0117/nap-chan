@@ -17,34 +17,39 @@ pub async fn join(
     command: &ApplicationCommandInteraction,
     read_channel_id: &Arc<Mutex<Option<ChannelId>>>,
 ) -> Result<()> {
-    let guild_id = command.guild_id.unwrap();
-    let author_id = command.member.as_ref().unwrap().user.id;
+    let guild_id = command.guild_id.ok_or(anyhow!("guild id not found"))?;
+    let author_id = command
+        .member
+        .as_ref()
+        .ok_or(anyhow!("member not found"))?
+        .user
+        .id;
     let text_channel_id = command.channel_id;
-    let channel_id = command
-        .guild_id
-        .unwrap()
+    let channel_id = guild_id
         .to_guild_cached(&ctx.cache)
         .await
-        .unwrap()
+        .ok_or(anyhow!("guild not found"))?
         .voice_states
         .get(&author_id)
-        .and_then(|voice_state| voice_state.channel_id)
-        .unwrap();
+        .ok_or(anyhow!("author not found"))?
+        .channel_id
+        .ok_or(anyhow!("channel id not found"))?;
     let connect_to = channel_id;
     let manager = songbird::get(&ctx)
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
+        .ok_or(anyhow!(
+            "Songbird Voice client placed in at initialisation."
+        ))?
         .clone();
     let (handle_lock, _) = manager.join(guild_id, connect_to).await;
     let mut handle = handle_lock.lock().await;
-    handle.deafen(true).await.unwrap();
+    handle.deafen(true).await?;
     handle.add_global_event(Event::Track(TrackEvent::End), TrackEndNotifier);
     *read_channel_id.lock().await = Some(text_channel_id);
     Ok(())
 }
 
 pub async fn leave(ctx: &Context, guild_id: GuildId) -> Result<()> {
-    //let guild_id = command.guild_id.unwrap();
     let manager = songbird::get(&ctx)
         .await
         .expect("Songbird Voice client placed in at initialisation.")
@@ -53,8 +58,7 @@ pub async fn leave(ctx: &Context, guild_id: GuildId) -> Result<()> {
     if has_handler {
         manager
             .remove(guild_id)
-            .await
-            .map_err(|e| anyhow!("{}", e))?;
+            .await?;
         Ok(())
     } else {
         Err(anyhow!("ボイスチャンネルに入ってないよ"))
@@ -62,7 +66,7 @@ pub async fn leave(ctx: &Context, guild_id: GuildId) -> Result<()> {
 }
 
 pub async fn mute(ctx: &Context, command: &ApplicationCommandInteraction) -> Result<()> {
-    let guild_id = command.guild_id.unwrap();
+    let guild_id = command.guild_id.ok_or(anyhow!("guild id not found"))?;
     let manager = songbird::get(&ctx)
         .await
         .expect("Songbird Voice client placed in at initialisation.")
@@ -84,7 +88,7 @@ pub async fn mute(ctx: &Context, command: &ApplicationCommandInteraction) -> Res
 }
 
 pub async fn unmute(ctx: &Context, command: &ApplicationCommandInteraction) -> Result<()> {
-    let guild_id = command.guild_id.unwrap();
+    let guild_id = command.guild_id.ok_or(anyhow!("guild id not found"))?;
     let manager = songbird::get(&ctx)
         .await
         .expect("Songbird Voice client placed in at initialisation.")

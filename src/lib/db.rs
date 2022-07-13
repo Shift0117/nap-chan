@@ -64,8 +64,6 @@ impl UserConfigDB for sqlx::SqlitePool {
                 .await?)
             }
         };
-
-
         tx.commit().await?;
         res
     }

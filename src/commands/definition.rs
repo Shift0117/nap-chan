@@ -1,10 +1,7 @@
 use anyhow::Result;
 use serenity::{
     http::Http,
-    model::{
-        id::GuildId,
-        interactions::application_command::{self, ApplicationCommand},
-    },
+    model::interactions::application_command::{self, ApplicationCommand},
 };
 pub async fn set_application_commands(http: &Http) -> Result<Vec<ApplicationCommand>> {
     let v = ApplicationCommand::set_global_application_commands(http, |commands| {
@@ -114,9 +111,8 @@ pub async fn set_application_commands(http: &Http) -> Result<Vec<ApplicationComm
             })
             .create_application_command(|command| {
                 command.name("info").description("設定を表示します")
-            }).create_application_command(|command|{
-                command.name("help").description("ヘルプです")
             })
+            .create_application_command(|command| command.name("help").description("ヘルプです"))
     })
     .await?;
     Ok(v)

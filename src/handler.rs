@@ -17,13 +17,7 @@ use serenity::{
         prelude::{Ready, VoiceState},
     },
 };
-use std::{
-    collections::HashSet,
-    convert::TryInto,
-    fs::{File, OpenOptions},
-    io::{Seek, Write},
-    sync::Arc,
-};
+use std::{convert::TryInto, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::info;
 
@@ -261,6 +255,7 @@ impl EventHandler for Handler {
             }
         }
     }
+
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Interaction::ApplicationCommand(command) = interaction {
             match command.data.name.as_str() {
@@ -408,7 +403,7 @@ impl EventHandler for Handler {
                                 .await;
                         };
                     }
-                },
+                }
                 "help" => {
                     util::help(&ctx.http, &command).await.unwrap();
                 }

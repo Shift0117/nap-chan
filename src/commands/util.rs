@@ -42,17 +42,16 @@ pub async fn rand_member(command: &Command, ctx: &Context) -> Result<Member> {
 
 pub async fn help(http: &Http, command: &Command) -> Result<()> {
     let global_commands = http.get_global_application_commands().await?;
-    let embed_fields = global_commands.iter().map(|global_command| {
-        (&global_command.name,&global_command.description,true)
-    }).collect::<Vec<_>>();
+    let embed_fields = global_commands
+        .iter()
+        .map(|global_command| (&global_command.name, &global_command.description, true))
+        .collect::<Vec<_>>();
 
-    command.create_interaction_response(http, |response| {
-        response.interaction_response_data(|data| {
-            data.create_embed(|emb| {
-                emb.fields(embed_fields)
-            })
+    command
+        .create_interaction_response(http, |response| {
+            response
+                .interaction_response_data(|data| data.create_embed(|emb| emb.fields(embed_fields)))
         })
-    }).await?;
+        .await?;
     Ok(())
 }
-
