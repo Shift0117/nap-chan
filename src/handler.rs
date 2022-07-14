@@ -33,7 +33,6 @@ use crate::{
         voice::{play_raw_voice, play_voice},
     },
 };
-pub const GUILD_IDS_PATH: &str = "guilds.json";
 
 #[derive(Clone, Copy, Hash)]
 pub enum Generators {

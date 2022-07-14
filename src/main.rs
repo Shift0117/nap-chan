@@ -2,20 +2,16 @@ mod commands;
 mod handler;
 mod lib;
 use dotenv::dotenv;
-use serenity::client::{ClientBuilder, Context};
-use serenity::framework::standard::macros::{command, group};
-use serenity::framework::standard::CommandResult;
+use serenity::client::ClientBuilder;
 use serenity::http::Http;
-use serenity::model::id::GuildId;
-use serenity::{async_trait, framework::StandardFramework, model::channel::Message};
+use serenity::{async_trait, framework::StandardFramework};
 use songbird::{Event, EventContext, SerenityInit};
-use std::collections::HashSet;
-use std::io::{self, Seek, Write};
+
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::handler::{Handler, GUILD_IDS_PATH};
+use crate::handler::Handler;
 use crate::lib::db::SpeakerDB;
 
 #[derive(Debug)]
