@@ -23,12 +23,14 @@ pub async fn simple_wolfram_alpha(input: &str) -> Result<String> {
 }
 
 pub async fn rand_member(command: &Command, ctx: &Context) -> Result<Member> {
-    let guild_id = command.guild_id.ok_or_else(||anyhow!("guild does not exist"))?;
+    let guild_id = command
+        .guild_id
+        .ok_or_else(|| anyhow!("guild does not exist"))?;
     let guild = ctx
         .cache
         .guild(guild_id)
         .await
-        .ok_or_else(||anyhow!("guild does not exist"))?;
+        .ok_or_else(|| anyhow!("guild does not exist"))?;
     let voice_states = guild.voice_states;
     let vc_members = voice_states.keys().collect::<Vec<_>>();
     let len = vc_members.len();
@@ -37,7 +39,7 @@ pub async fn rand_member(command: &Command, ctx: &Context) -> Result<Member> {
     ctx.cache
         .member(guild_id, user_id)
         .await
-        .ok_or_else(||anyhow!("member not found"))
+        .ok_or_else(|| anyhow!("member not found"))
 }
 
 pub async fn help(http: &Http, command: &Command) -> Result<()> {

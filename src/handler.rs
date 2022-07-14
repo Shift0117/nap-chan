@@ -114,10 +114,10 @@ pub fn get_argument(command: &Command, index: usize) -> Result<&ArgumentValue> {
         .data
         .options
         .get(index)
-        .ok_or_else(||anyhow!("index out of range"))?
+        .ok_or_else(|| anyhow!("index out of range"))?
         .resolved
         .as_ref()
-        .ok_or_else(||anyhow!("could not parse"))
+        .ok_or_else(|| anyhow!("could not parse"))
 }
 impl Handler {}
 
@@ -214,7 +214,9 @@ impl EventHandler for Handler {
             let uid = user_id.0 as i64;
 
             let user_config = self.database.get_user_config_or_default(uid).await.unwrap();
-            let nickname = user_config.read_nickname.unwrap_or_else(||user_name.to_string());
+            let nickname = user_config
+                .read_nickname
+                .unwrap_or_else(|| user_name.to_string());
             let greet_text = match greeting_type {
                 0 => user_config.hello,
                 1 => user_config.bye,
@@ -362,9 +364,7 @@ impl EventHandler for Handler {
                     let menus = generators.iter().map(|gen| {
                         CreateSelectMenu::default()
                             .options(|os| {
-                                for speaker in speakers
-                                    .iter()
-                                    .filter(|x| x.generator_type == *gen)
+                                for speaker in speakers.iter().filter(|x| x.generator_type == *gen)
                                 {
                                     os.create_option(|o| {
                                         o.label(format!("{} {}", speaker.name, speaker.style_name))

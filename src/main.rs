@@ -84,7 +84,7 @@ async fn main() {
         )
         .await
         .expect("Couldn't connect to database");
-        
+
     sqlx::migrate!("./migrations")
         .run(&database)
         .await

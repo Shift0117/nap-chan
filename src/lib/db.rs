@@ -41,7 +41,7 @@ impl UserConfigDB for sqlx::SqlitePool {
         )
         .fetch_optional(&mut tx)
         .await?
-        .ok_or_else(||anyhow!("key not found"))?;
+        .ok_or_else(|| anyhow!("key not found"))?;
         tx.commit().await?;
         Ok(q)
     }
@@ -105,7 +105,7 @@ impl DictDB for sqlx::SqlitePool {
         let dict = query!("SELECT read_word FROM dict WHERE word = ?", word)
             .fetch_optional(&mut tx)
             .await?
-            .ok_or_else(||anyhow!("key not found"))?
+            .ok_or_else(|| anyhow!("key not found"))?
             .read_word;
         tx.commit().await?;
         Ok(dict)
@@ -202,7 +202,8 @@ impl SpeakerDB for sqlx::SqlitePool {
                     style.id
                 )
                 .fetch_optional(&mut tx)
-                .await?).is_none()
+                .await?)
+                    .is_none()
                 {
                     query!(
                         "INSERT INTO speakers (name,style_id,style_name,generator_type) VALUES (?,?,?,?)",
@@ -237,7 +238,8 @@ impl SpeakerDB for sqlx::SqlitePool {
                     style.id
                 )
                 .fetch_optional(&mut tx)
-                .await?).is_none()
+                .await?)
+                    .is_none()
                 {
                     query!(
                         "INSERT INTO speakers (name,style_id,style_name,generator_type) VALUES (?,?,?,?)",
