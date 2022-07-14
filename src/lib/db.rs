@@ -41,7 +41,7 @@ impl UserConfigDB for sqlx::SqlitePool {
         )
         .fetch_optional(&mut tx)
         .await?
-        .ok_or(anyhow!("key not found"))?;
+        .ok_or_else(||anyhow!("key not found"))?;
         tx.commit().await?;
         Ok(q)
     }
@@ -105,7 +105,7 @@ impl DictDB for sqlx::SqlitePool {
         let dict = query!("SELECT read_word FROM dict WHERE word = ?", word)
             .fetch_optional(&mut tx)
             .await?
-            .ok_or(anyhow!("key not found"))?
+            .ok_or_else(||anyhow!("key not found"))?
             .read_word;
         tx.commit().await?;
         Ok(dict)
@@ -196,13 +196,13 @@ impl SpeakerDB for sqlx::SqlitePool {
         };
         for speaker in voicevox_voice_types {
             for style in speaker.styles {
-                if let None = query!(
+                if (query!(
                     "SELECT * FROM speakers WHERE generator_type = ? AND style_id = ?",
                     "VOICEVOX",
                     style.id
                 )
                 .fetch_optional(&mut tx)
-                .await?
+                .await?).is_none()
                 {
                     query!(
                         "INSERT INTO speakers (name,style_id,style_name,generator_type) VALUES (?,?,?,?)",
@@ -231,13 +231,13 @@ impl SpeakerDB for sqlx::SqlitePool {
         };
         for speaker in coeiro_voice_types {
             for style in speaker.styles {
-                if let None = query!(
+                if (query!(
                     "SELECT * FROM speakers WHERE generator_type = ? AND style_id = ?",
                     "COEIROINK",
                     style.id
                 )
                 .fetch_optional(&mut tx)
-                .await?
+                .await?).is_none()
                 {
                     query!(
                         "INSERT INTO speakers (name,style_id,style_name,generator_type) VALUES (?,?,?,?)",

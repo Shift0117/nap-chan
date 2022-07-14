@@ -33,7 +33,7 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) -> Resul
         .unwrap_or(
             msg.member
                 .as_ref()
-                .ok_or(anyhow!("member not found"))?
+                .ok_or_else(||anyhow!("member not found"))?
                 .nick
                 .as_ref()
                 .unwrap_or(&msg.author.name)
@@ -72,12 +72,12 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) -> Resul
     let guild = msg
         .guild(&ctx.cache)
         .await
-        .ok_or(anyhow!("guild not found"))?;
+        .ok_or_else(||anyhow!("guild not found"))?;
     let guild_id = guild.id;
     let (_, path) = temp_file.keep()?;
     let manager = songbird::get(ctx)
         .await
-        .ok_or(anyhow!(
+        .ok_or_else(||anyhow!(
             "Songbird Voice client placed in at initialisation."
         ))?
         .clone();
@@ -119,7 +119,7 @@ pub async fn create_voice(
         .query(&synthesis_arg)
         .send()
         .await?;
-    temp_file.write(&synthesis_res.bytes().await?)?;
+    let _ = temp_file.write(&synthesis_res.bytes().await?)?;
     Ok(())
 }
 
@@ -135,7 +135,7 @@ pub async fn play_raw_voice(
     let (_, path) = temp_file.keep()?;
     let manager = songbird::get(ctx)
         .await
-        .ok_or(anyhow!(
+        .ok_or_else(||anyhow!(
             "Songbird Voice client placed in at initialisation."
         ))?
         .clone();
@@ -143,7 +143,7 @@ pub async fn play_raw_voice(
         let mut handler = handler_lock.lock().await;
         let mut source = songbird::ffmpeg(&path).await?;
         source.metadata.source_url = Some(path.to_string_lossy().to_string());
-        handler.enqueue_source(source.into());
+        handler.enqueue_source(source);
     }
     Ok(())
 }

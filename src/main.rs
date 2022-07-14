@@ -76,15 +76,15 @@ async fn main() {
         .init();
     dotenv().ok();
     let database = sqlx::sqlite::SqlitePoolOptions::new()
-        .max_connections(5)
+        .max_connections(10)
         .connect_with(
             sqlx::sqlite::SqliteConnectOptions::new()
                 .filename("database.sqlite")
-                .create_if_missing(true)
-                .shared_cache(true),
+                .create_if_missing(true),
         )
         .await
         .expect("Couldn't connect to database");
+        
     sqlx::migrate!("./migrations")
         .run(&database)
         .await

@@ -26,10 +26,10 @@ pub async fn interaction_create_with_text(
     command_name: &str,
 ) -> Result<SlashCommandTextResult> {
     match command_name {
-        "join" => meta::join(&ctx, &command, &handler.read_channel_id)
+        "join" => meta::join(ctx, command, &handler.read_channel_id)
             .await
             .map(|_| SlashCommandTextResult::from_str("おはよ！")),
-        "leave" => meta::leave(&ctx, command.guild_id.unwrap())
+        "leave" => meta::leave(ctx, command.guild_id.unwrap())
             .await
             .map(|_| SlashCommandTextResult::from_str("ばいばい")),
         "add" => {
@@ -51,9 +51,9 @@ pub async fn interaction_create_with_text(
             }
         }
         "rem" => {
-            let word = get_argument(&command, 0)?;
+            let word = get_argument(command, 0)?;
             if let ArgumentValue::String(word) = word {
-                if let Ok(_) = handler.database.remove(word).await {
+                if (handler.database.remove(word).await).is_ok() {
                     Ok(SlashCommandTextResult::from_str(&format!(
                         "これからは {} って読むね",
                         word
@@ -65,14 +65,14 @@ pub async fn interaction_create_with_text(
                 unreachable!()
             }
         }
-        "mute" => meta::mute(&ctx, &command)
+        "mute" => meta::mute(ctx, command)
             .await
             .map(|_| SlashCommandTextResult::from_str("ミュートしたよ")),
-        "unmute" => meta::unmute(&ctx, &command)
+        "unmute" => meta::unmute(ctx, command)
             .await
             .map(|_| SlashCommandTextResult::from_str("ミュート解除したよ")),
         "hello" => {
-            let greet = get_argument(&command, 0)?;
+            let greet = get_argument(command, 0)?;
             if let ArgumentValue::String(greet) = greet {
                 let user_id = command.member.as_ref().unwrap().user.id.0 as i64;
 
@@ -81,7 +81,7 @@ pub async fn interaction_create_with_text(
                 handler.database.update_user_config(&user_config).await?;
                 Ok(SlashCommandTextResult::from_str(&format!(
                     "{}さん、これから{}ってあいさつするね",
-                    get_display_name(&command),
+                    get_display_name(command),
                     greet
                 )))
             } else {
@@ -97,7 +97,7 @@ pub async fn interaction_create_with_text(
                 handler.database.update_user_config(&user_config).await?;
                 Ok(SlashCommandTextResult::from_str(&format!(
                     "{}さん、これから{}ってあいさつするね",
-                    get_display_name(&command),
+                    get_display_name(command),
                     greet
                 )))
             } else {
@@ -114,14 +114,14 @@ pub async fn interaction_create_with_text(
                 handler.database.update_user_config(&user_config).await?;
                 Ok(SlashCommandTextResult::from_str(&format!(
                     "{}さん、これからは{}って呼ぶね",
-                    get_display_name(&command),
-                    nickname.to_string()
+                    get_display_name(command),
+                    nickname
                 )))
             } else {
                 unreachable!()
             }
         }
-        "rand_member" => util::rand_member(&command, &ctx).await.map(|member| {
+        "rand_member" => util::rand_member(command, ctx).await.map(|member| {
             SlashCommandTextResult::from_str(&format!(
                 "でけでけでけでけ・・・でん！{}",
                 &member.nick.unwrap_or(member.user.name)

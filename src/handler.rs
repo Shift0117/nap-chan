@@ -114,10 +114,10 @@ pub fn get_argument(command: &Command, index: usize) -> Result<&ArgumentValue> {
         .data
         .options
         .get(index)
-        .ok_or(anyhow!("index out of range"))?
+        .ok_or_else(||anyhow!("index out of range"))?
         .resolved
         .as_ref()
-        .ok_or(anyhow!("could not parse"))
+        .ok_or_else(||anyhow!("could not parse"))
 }
 impl Handler {}
 
@@ -156,7 +156,7 @@ impl EventHandler for Handler {
                 .to_guild_cached(&ctx.cache)
                 .await?
                 .voice_states
-                .get(&bot_id)?
+                .get(bot_id)?
                 .channel_id?;
             let channel_id = guild_id?
                 .to_guild_cached(&ctx.cache)
@@ -214,7 +214,7 @@ impl EventHandler for Handler {
             let uid = user_id.0 as i64;
 
             let user_config = self.database.get_user_config_or_default(uid).await.unwrap();
-            let nickname = user_config.read_nickname.unwrap_or(user_name.to_string());
+            let nickname = user_config.read_nickname.unwrap_or_else(||user_name.to_string());
             let greet_text = match greeting_type {
                 0 => user_config.hello,
                 1 => user_config.bye,
@@ -248,7 +248,7 @@ impl EventHandler for Handler {
             .get(&bot_id)
             .and_then(|voice_states| voice_states.channel_id);
         let text_channel_id = msg.channel_id;
-        let read_channel_id = self.read_channel_id.lock().await.clone();
+        let read_channel_id = *self.read_channel_id.lock().await;
         info!("msg = {:?}", &msg);
         if read_channel_id == Some(text_channel_id) {
             if let Some(_voice_channel_id) = voice_channel_id {
@@ -268,7 +268,7 @@ impl EventHandler for Handler {
                 "add" | "rem" | "hello" | "bye" | "join" | "leave" | "mute" | "unmute"
                 | "rand_member" | "set_nickname" => {
                     let content =
-                        interaction_create_with_text(&self, &command, &ctx, &command.data.name)
+                        interaction_create_with_text(self, &command, &ctx, &command.data.name)
                             .await;
                     if let Err(why) = command
                         .create_interaction_response(&ctx.http, |response| {
@@ -364,7 +364,7 @@ impl EventHandler for Handler {
                             .options(|os| {
                                 for speaker in speakers
                                     .iter()
-                                    .filter(|x| x.generator_type == gen.to_string())
+                                    .filter(|x| x.generator_type == *gen)
                                 {
                                     os.create_option(|o| {
                                         o.label(format!("{} {}", speaker.name, speaker.style_name))

@@ -49,11 +49,9 @@ impl TextMessage for String {
                     let katakana = to_katakana(english);
                     if is_katakana(&katakana) {
                         temp = katakana;
-                    } else {
-                        if let Some(words) = min_split(english) {
-                            for word in words.iter() {
-                                temp = temp.replacen(word, &ALKANA.get_katakana(&word).unwrap(), 1);
-                            }
+                    } else if let Some(words) = min_split(english) {
+                        for word in words.iter() {
+                            temp = temp.replacen(word, &ALKANA.get_katakana(word).unwrap(), 1);
                         }
                     }
                 }
