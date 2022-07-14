@@ -43,31 +43,7 @@ impl songbird::EventHandler for TrackEndNotifier {
     }
 }
 
-#[group]
-#[commands(register)]
-struct General;
 
-#[command]
-#[only_in(guilds)]
-async fn register(_ctx: &Context, msg: &Message) -> CommandResult {
-    tracing::info!("register called");
-    let guild_id = msg.guild_id.unwrap();
-    let mut guilds_file = std::fs::OpenOptions::new()
-        .write(true)
-        .read(true)
-        .create(true)
-        .open(GUILD_IDS_PATH)
-        .unwrap();
-    let reader = std::io::BufReader::new(&guilds_file);
-    let mut guild_ids: HashSet<GuildId> =
-        serde_json::from_reader(reader).expect("JSON parse error");
-    guilds_file.seek(io::SeekFrom::Start(0)).ok();
-    guild_ids.insert(guild_id);
-    let guild_ids_json = serde_json::to_string(&guild_ids).unwrap();
-    guilds_file.write_all(guild_ids_json.as_bytes()).ok();
-    tracing::info!("register finished");
-    Ok(())
-}
 
 #[tokio::main]
 async fn main() {
@@ -92,9 +68,7 @@ async fn main() {
     database.generate_speaker_db().await.unwrap();
     let application_id = std::env::var("APP_ID").unwrap().parse().unwrap();
     let token = std::env::var("DISCORD_TOKEN").expect("environment variable not found");
-    let framework = StandardFramework::new()
-        .configure(|c| c.prefix(">"))
-        .group(&GENERAL_GROUP);
+    let framework = StandardFramework::new();
     let mut client =
         ClientBuilder::new_with_http(Http::new_with_token_application_id(&token, application_id))
             .event_handler(Handler {
