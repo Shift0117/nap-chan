@@ -39,8 +39,6 @@ impl songbird::EventHandler for TrackEndNotifier {
     }
 }
 
-
-
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
@@ -61,7 +59,7 @@ async fn main() {
         .run(&database)
         .await
         .expect("Couldn't run database migrations");
-    database.generate_speaker_db().await.unwrap();
+    let _ = database.insert_speaker_data().await;
     let application_id = std::env::var("APP_ID").unwrap().parse().unwrap();
     let token = std::env::var("DISCORD_TOKEN").expect("environment variable not found");
     let framework = StandardFramework::new();

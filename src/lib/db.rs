@@ -132,7 +132,7 @@ impl DictDB for sqlx::SqlitePool {
 pub trait SpeakerDB {
     async fn speaker_name_to_id(&self, name: &str) -> Result<(Generators, u8)>;
     async fn speaker_id_to_name(&self, generator_type: Generators, id: u8) -> Result<String>;
-    async fn generate_speaker_db(&self) -> Result<()>;
+    async fn insert_speaker_data(&self) -> Result<()>;
     async fn get_speaker(&self, id: usize) -> Result<VoiceType>;
     async fn get_all_speakers(&self) -> Result<Vec<VoiceType>>;
 }
@@ -166,7 +166,7 @@ impl SpeakerDB for sqlx::SqlitePool {
         tx.commit().await?;
         Ok(format!("{} {}", q.name, q.style_name))
     }
-    async fn generate_speaker_db(&self) -> Result<()> {
+    async fn insert_speaker_data(&self) -> Result<()> {
         dotenv::dotenv().ok();
         #[derive(Deserialize, Clone)]
         struct Style {
@@ -180,31 +180,23 @@ impl SpeakerDB for sqlx::SqlitePool {
         }
 
         let mut tx = self.begin().await.unwrap();
-        let voicevox_voice_types: Vec<Speaker> = {
-            let base_url =
-                std::env::var("BASE_URL_VOICEVOX").expect("environment variable not found");
+        query!("DELETE FROM speakers")
+            .execute(&mut tx)
+            .await
+            .unwrap();
+        let voicevox_voice_types: Result<Vec<Speaker>> = async {
+            let base_url = std::env::var("BASE_URL_VOICEVOX")?;
             let query_url = format!("{}/speakers", base_url);
             let client = reqwest::Client::new();
-            let res = client
-                .get(query_url)
-                .send()
-                .await
-                .expect("Panic in speaker info query");
+            let res = client.get(query_url).send().await?;
 
             //info!("{:?}",res.text().await);
-            res.json().await.unwrap()
-        };
-        for speaker in voicevox_voice_types {
-            for style in speaker.styles {
-                if (query!(
-                    "SELECT * FROM speakers WHERE generator_type = ? AND style_id = ?",
-                    "VOICEVOX",
-                    style.id
-                )
-                .fetch_optional(&mut tx)
-                .await?)
-                    .is_none()
-                {
+            res.json().await.map_err(|e| e.into())
+        }
+        .await;
+        if let Ok(voicevox_voice_types) = voicevox_voice_types {
+            for speaker in voicevox_voice_types {
+                for style in speaker.styles {
                     query!(
                         "INSERT INTO speakers (name,style_id,style_name,generator_type) VALUES (?,?,?,?)",
                         speaker.name,
@@ -218,29 +210,17 @@ impl SpeakerDB for sqlx::SqlitePool {
                 }
             }
         }
-        let coeiro_voice_types: Vec<Speaker> = {
-            let base_url =
-                std::env::var("BASE_URL_COEIRO").expect("environment variable not found");
+        let coeiro_voice_types: Result<Vec<Speaker>> = async {
+            let base_url = std::env::var("BASE_URL_COEIRO")?;
             let query_url = format!("{}/speakers", base_url);
             let client = reqwest::Client::new();
-            let res = client
-                .get(query_url)
-                .send()
-                .await
-                .expect("Panic in speaker info query");
-            res.json().await.unwrap()
-        };
-        for speaker in coeiro_voice_types {
-            for style in speaker.styles {
-                if (query!(
-                    "SELECT * FROM speakers WHERE generator_type = ? AND style_id = ?",
-                    "COEIROINK",
-                    style.id
-                )
-                .fetch_optional(&mut tx)
-                .await?)
-                    .is_none()
-                {
+            let res = client.get(query_url).send().await?;
+            res.json().await.map_err(|e| e.into())
+        }
+        .await;
+        if let Ok(coeiro_voice_types) = coeiro_voice_types {
+            for speaker in coeiro_voice_types {
+                for style in speaker.styles {
                     query!(
                         "INSERT INTO speakers (name,style_id,style_name,generator_type) VALUES (?,?,?,?)",
                         speaker.name,
