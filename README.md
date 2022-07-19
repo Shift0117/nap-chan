@@ -1,16 +1,7 @@
 # discord_bot.rs
-nakochan https://github.com/niuez/nakochan のような discord の読み上げ bot を目指しています
+[nakochan](https://github.com/niuez/nakochan) を Rust で書くことを目的として作られました。
 
 ## voicevox(coeiroink)を使った読み上げbot
-
-### 準備
--- 注意　現状このままでは動きません
-
-1. COEIROINK の `run.exe` を実行します
-2. .env.sample に従って .env に bot の token,application id,COEIROINK が動いているアドレス(デフォルトはおそらく http://127.0.0.1:50031 )を入力します
-
-
-
 # 機能
 - 読み上げ
 - コマンド
@@ -25,3 +16,4 @@ nakochan https://github.com/niuez/nakochan のような discord の読み上げ 
   - `/rand_member` VC 内のランダムなメンバーを指定します
   - `/set_nickname` 呼ぶ名前を設定します
   - `/walpha` 計算などをしてくれます
+  - `/help` ヘルプを表示します
