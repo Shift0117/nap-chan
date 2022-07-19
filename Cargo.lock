@@ -368,30 +368,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "discord-bot-rust"
-version = "0.1.0"
-dependencies = [
- "alkana-rs",
- "anyhow",
- "dotenv",
- "once_cell",
- "rand 0.8.5",
- "regex",
- "reqwest",
- "serde",
- "serde_json",
- "serenity",
- "songbird",
- "sqlx",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-futures",
- "tracing-subscriber",
- "wana_kana",
-]
-
-[[package]]
 name = "discortp"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -999,6 +975,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a51313c5820b0b02bd422f4b44776fbf47961755c74ce64afc73bfad10226c3"
 dependencies = [
  "getrandom 0.2.7",
+]
+
+[[package]]
+name = "nap-chan"
+version = "0.1.0"
+dependencies = [
+ "alkana-rs",
+ "anyhow",
+ "dotenv",
+ "once_cell",
+ "rand 0.8.5",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serenity",
+ "songbird",
+ "sqlx",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-futures",
+ "tracing-subscriber",
+ "wana_kana",
 ]
 
 [[package]]

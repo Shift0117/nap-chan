@@ -1,5 +1,5 @@
 [package]
-name = "discord-bot-rust"
+name = "nap-chan"
 version = "0.1.0"
 authors = ["Shift0117"]
 edition = "2021"
