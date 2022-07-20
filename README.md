@@ -1,10 +1,10 @@
 # discord_bot.rs
-[nakochan](https://github.com/niuez/nakochan) を Rust で書くことを目的として作られました。
+[nakochan](https://github.com/niuez/nakochan) を Rust で書くことを目的として作られた、 discord の voicevox/coeiroink を使った読み上げ bot です。
 
 # 導入方法
 [install.md](./install.md)を参照してください。
 
-## voicevox(coeiroink)を使った読み上げbot
+
 # 機能
 - 読み上げ
 - コマンド
