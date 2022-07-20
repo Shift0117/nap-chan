@@ -1,6 +1,5 @@
 # 準備
 以下、Windowsを想定しておきます。
-## discord bot の準備
 
 ## coeiroinkのダウンロード
 
