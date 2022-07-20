@@ -184,6 +184,7 @@ impl SpeakerDB for sqlx::SqlitePool {
             .execute(&mut tx)
             .await
             .unwrap();
+        query!("DELETE FROM sqlite_sequence WHERE name = 'speakers'").execute(&mut tx).await.unwrap();
         let voicevox_voice_types: Result<Vec<Speaker>> = async {
             let base_url = std::env::var("BASE_URL_VOICEVOX")?;
             let query_url = format!("{}/speakers", base_url);

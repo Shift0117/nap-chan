@@ -125,6 +125,7 @@ fn alkana_speed_test() {
 
 // 次の条件 (*) を満たすような str の分割 str = S_1 + S_2 + ... + S_k であって、k が最小であるものを求める
 // (*) S_1,S_2,...,S_k はすべて alkana で変換可能
+// O(n^3) where n = str.len()
 fn min_split(str: &str) -> Option<Vec<String>> {
     let str = str.chars().collect::<Vec<_>>();
     let n = str.len();
