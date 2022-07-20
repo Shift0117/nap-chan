@@ -21,7 +21,7 @@ pub struct UserConfig {
     pub generator_type: i64,
     pub read_nickname: Option<String>,
 }
-
+#[derive(Debug)]
 pub struct VoiceType {
     pub id: i64,
     pub name: String,

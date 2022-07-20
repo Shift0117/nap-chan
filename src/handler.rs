@@ -359,23 +359,31 @@ impl EventHandler for Handler {
                 }
                 "set_voice_type" => {
                     let speakers = self.database.get_all_speakers().await.unwrap();
+                    info!("{:?}", &speakers);
                     let generators = ["COEIROINK", "VOICEVOX"];
-                    let menus = generators.iter().map(|gen| {
-                        CreateSelectMenu::default()
-                            .options(|os| {
-                                for speaker in speakers.iter().filter(|x| x.generator_type == *gen)
-                                {
-                                    os.create_option(|o| {
-                                        o.label(format!("{} {}", speaker.name, speaker.style_name))
+                    let menus = generators
+                        .iter()
+                        .filter(|&&gen| speakers.iter().any(|x| x.generator_type == gen))
+                        .map(|&gen| {
+                            CreateSelectMenu::default()
+                                .options(|os| {
+                                    for speaker in
+                                        speakers.iter().filter(|x| x.generator_type == gen)
+                                    {
+                                        os.create_option(|o| {
+                                            o.label(format!(
+                                                "{} {}",
+                                                speaker.name, speaker.style_name
+                                            ))
                                             .value(speaker.id)
-                                    });
-                                }
-                                os
-                            })
-                            .custom_id(gen)
-                            .clone()
-                    });
-                    let _ = command
+                                        });
+                                    }
+                                    os
+                                })
+                                .custom_id(gen)
+                                .clone()
+                        });
+                    let e = command
                         .create_interaction_response(&ctx.http, |response| {
                             response
                                 .kind(InteractionResponseType::ChannelMessageWithSource)
@@ -389,6 +397,9 @@ impl EventHandler for Handler {
                                 })
                         })
                         .await;
+                    if e.is_err() {
+                        info!("{:?}", e);
+                    }
                     return;
                 }
                 "walpha" => {
