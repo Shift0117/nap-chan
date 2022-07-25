@@ -21,6 +21,18 @@ pub struct UserConfig {
     pub generator_type: i64,
     pub read_nickname: Option<String>,
 }
+impl UserConfig {
+    pub fn from_user_id(user_id: i64) -> Self {
+        UserConfig {
+            user_id,
+            hello: "こんにちは".to_string(),
+            bye: "ばいばい".to_string(),
+            voice_type: 1,
+            generator_type: 0,
+            read_nickname: None,
+        }
+    }
+}
 #[derive(Debug)]
 pub struct VoiceType {
     pub id: i64,
@@ -46,26 +58,15 @@ impl UserConfigDB for sqlx::SqlitePool {
         Ok(q)
     }
     async fn get_user_config_or_default(&self, user_id: i64) -> Result<UserConfig> {
-        let mut tx = self.begin().await?;
-
-        let res = match self.get_user_config(user_id).await {
+        match self.get_user_config(user_id).await {
             Ok(q) => Ok(q),
             Err(_) => {
                 query!("INSERT INTO user_config (user_id) VALUES (?)", user_id)
-                    .execute(&mut tx)
-                    .await
-                    .ok();
-                Ok(query_as!(
-                    UserConfig,
-                    "SELECT * FROM user_config WHERE user_id = ?",
-                    user_id
-                )
-                .fetch_one(&mut tx)
-                .await?)
+                    .execute(self)
+                    .await?;
+                Ok(UserConfig::from_user_id(user_id))
             }
-        };
-        tx.commit().await?;
-        res
+        }
     }
     async fn update_user_config(&self, user_config: &UserConfig) -> Result<u64> {
         let mut tx = self.begin().await?;
@@ -184,7 +185,10 @@ impl SpeakerDB for sqlx::SqlitePool {
             .execute(&mut tx)
             .await
             .unwrap();
-        query!("DELETE FROM sqlite_sequence WHERE name = 'speakers'").execute(&mut tx).await.unwrap();
+        query!("DELETE FROM sqlite_sequence WHERE name = 'speakers'")
+            .execute(&mut tx)
+            .await
+            .unwrap();
         let voicevox_voice_types: Result<Vec<Speaker>> = async {
             let base_url = std::env::var("BASE_URL_VOICEVOX")?;
             let query_url = format!("{}/speakers", base_url);
