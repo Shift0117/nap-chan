@@ -49,7 +49,7 @@ discordの画面左の+ボタンからできます。
 5. .env.sample に従って VOICEVOX が動いているアドレス(デフォルトはおそらく http://127.0.0.1:50021 ) を入力します。 (optional)
 6. .env.sample に従って wolfram alpha API の id を入力します。 (optional)
 7. cargo install sqlx を実行します。
-8. sqlx database create を実行します。(1.の場所に生成されます)
-9. sqlx migrate run を実行します。
+8. cargo sqlx database create を実行します。(1.の場所に生成されます)
+9. cargo sqlx migrate run を実行します。
 10. cargo build --release を実行します。
 11. target/release/nap-chan.exe を実行します。
