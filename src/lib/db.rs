@@ -59,13 +59,13 @@ impl UserConfigDB for sqlx::SqlitePool {
     }
     async fn get_user_config_or_default(&self, user_id: i64) -> Result<UserConfig> {
         match self.get_user_config(user_id).await {
-            Ok(q) => Ok(q),
             Err(_) => {
                 query!("INSERT INTO user_config (user_id) VALUES (?)", user_id)
                     .execute(self)
                     .await?;
                 Ok(UserConfig::from_user_id(user_id))
-            }
+            },
+            Ok(q) => Ok(q)
         }
     }
     async fn update_user_config(&self, user_config: &UserConfig) -> Result<u64> {
