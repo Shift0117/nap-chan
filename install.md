@@ -43,7 +43,7 @@ discordの画面左の+ボタンからできます。
 ## 実行方法
 
 1. .env.sample と同じディレクトリに .env というファイルを作成します。
-2. .env.sample に従って .env の `DATABASE_URL` にデータベースを置くパスを sqlite:(PATH) の形式で入力します。
+2. .env.sample に従って .env の `DATABASE_URL` にデータベースを置くパスを sqlite:PATH/filename.sqlite の形式で入力します。
 3. .env.sample に従って .env に bot の token,application id を入力します。
 4. .env.sample に従って COEIROINK が動いているアドレス(デフォルトはおそらく http://127.0.0.1:50031 ) を入力します。 (optional)
 5. .env.sample に従って VOICEVOX が動いているアドレス(デフォルトはおそらく http://127.0.0.1:50021 ) を入力します。 (optional)
