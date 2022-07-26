@@ -54,6 +54,7 @@ pub async fn leave(ctx: &Context, guild_id: GuildId) -> Result<()> {
         .await
         .expect("Songbird Voice client placed in at initialisation.")
         .clone();
+
     let has_handler = manager.get(guild_id).is_some();
     if has_handler {
         manager.remove(guild_id).await?;
