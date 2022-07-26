@@ -131,8 +131,8 @@ impl DictDB for sqlx::SqlitePool {
 
 #[async_trait]
 pub trait SpeakerDB {
-    async fn speaker_name_to_id(&self, name: &str) -> Result<(Generators, u8)>;
-    async fn speaker_id_to_name(&self, generator_type: Generators, id: u8) -> Result<String>;
+    async fn speaker_name_to_id(&self, name: &str) -> Result<(Generators, u32)>;
+    async fn speaker_id_to_name(&self, generator_type: Generators, id: u32) -> Result<String>;
     async fn insert_speaker_data(&self) -> Result<()>;
     async fn get_speaker(&self, id: usize) -> Result<VoiceType>;
     async fn get_all_speakers(&self) -> Result<Vec<VoiceType>>;
@@ -140,7 +140,7 @@ pub trait SpeakerDB {
 
 #[async_trait]
 impl SpeakerDB for sqlx::SqlitePool {
-    async fn speaker_name_to_id(&self, name: &str) -> Result<(Generators, u8)> {
+    async fn speaker_name_to_id(&self, name: &str) -> Result<(Generators, u32)> {
         let mut tx = self.begin().await.unwrap();
         let q = query!(
             "SELECT generator_type,style_id FROM speakers WHERE style_name = ?",
@@ -151,10 +151,10 @@ impl SpeakerDB for sqlx::SqlitePool {
         tx.commit().await?;
         Ok((
             Generators::try_from(q.generator_type.as_str())?,
-            q.style_id as u8,
+            q.style_id as u32,
         ))
     }
-    async fn speaker_id_to_name(&self, generator_type: Generators, id: u8) -> Result<String> {
+    async fn speaker_id_to_name(&self, generator_type: Generators, id: u32) -> Result<String> {
         let mut tx = self.begin().await.unwrap();
         let str: &str = generator_type.into();
         let q = query!(
@@ -172,7 +172,7 @@ impl SpeakerDB for sqlx::SqlitePool {
         #[derive(Deserialize, Clone)]
         struct Style {
             pub name: String,
-            pub id: u8,
+            pub id: u32,
         }
         #[derive(Deserialize, Clone)]
         struct Speaker {

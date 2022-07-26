@@ -15,7 +15,7 @@ use super::{db::UserConfigDB, text::TextMessage};
 
 #[derive(Hash)]
 pub struct SpeakerId {
-    id: u8,
+    id: u32,
     generator: Generators,
 }
 
@@ -94,7 +94,7 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) -> Resul
 
 pub async fn create_voice(
     text: &str,
-    voice_type: u8,
+    voice_type: u32,
     generator_type: u8,
     temp_file: &mut File,
 ) -> Result<()> {
@@ -124,7 +124,7 @@ pub async fn create_voice(
 pub async fn play_raw_voice(
     ctx: &Context,
     str: &str,
-    voice_type: u8,
+    voice_type: u32,
     generator_type: u8,
     guild_id: GuildId,
 ) -> Result<()> {

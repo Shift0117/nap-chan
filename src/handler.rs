@@ -83,7 +83,7 @@ pub struct SlashCommandTextResult {
     msg: String,
     read: bool,
     format: bool,
-    voice_type: Option<u8>,
+    voice_type: Option<u32>,
     generator_type: Option<u8>,
 }
 
@@ -299,7 +299,7 @@ impl EventHandler for Handler {
                                 .await
                                 .unwrap();
                             let voice_type =
-                                content.voice_type.unwrap_or(user_config.voice_type as u8);
+                                content.voice_type.unwrap_or(user_config.voice_type as u32);
                             let generator_type = content
                                 .generator_type
                                 .unwrap_or(user_config.generator_type as u8);
@@ -328,7 +328,7 @@ impl EventHandler for Handler {
                         .database
                         .speaker_id_to_name(
                             (user_config.generator_type as u8).try_into().unwrap(),
-                            user_config.voice_type as u8,
+                            user_config.voice_type as u32,
                         )
                         .await
                         .unwrap();
