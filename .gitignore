@@ -1,5 +1,4 @@
 /target
 /.env
-*.json
 /temp
 /*.sql*

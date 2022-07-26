@@ -1,0 +1,295 @@
+{
+  "db": "SQLite",
+  "10272558f174be16820af4ac90c825962fb2ef18d62a3b986abcbc8046ebe443": {
+    "describe": {
+      "columns": [
+        {
+          "name": "read_word",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT read_word FROM dict WHERE word = ?"
+  },
+  "21be255a29248b4a5a6c70a2438c657c88fe7eee009811515c26c26e17a64ae6": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "name",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "style_id",
+          "ordinal": 2,
+          "type_info": "Int64"
+        },
+        {
+          "name": "style_name",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "generator_type",
+          "ordinal": 4,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM speakers WHERE id = ?"
+  },
+  "3197257e6445da81a569da5357179e07b35596b7f4491456ec1621a0f4ee7877": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 6
+      }
+    },
+    "query": "UPDATE user_config SET hello = ?,bye = ?,voice_type = ?,generator_type = ?,read_nickname = ? WHERE user_id = ?"
+  },
+  "33da42f2f3657bc35fb11d0caaf8f571e6d8997fbf45990bb587351357f30922": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "INSERT INTO user_config (user_id) VALUES (?)"
+  },
+  "59df615107719aa5e80e691838e9665fdbd0dd2e9dd415941bbb8296b847b346": {
+    "describe": {
+      "columns": [
+        {
+          "name": "user_id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "hello",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "bye",
+          "ordinal": 2,
+          "type_info": "Text"
+        },
+        {
+          "name": "generator_type",
+          "ordinal": 3,
+          "type_info": "Int64"
+        },
+        {
+          "name": "voice_type",
+          "ordinal": 4,
+          "type_info": "Int64"
+        },
+        {
+          "name": "read_nickname",
+          "ordinal": 5,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        true
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM user_config WHERE user_id = ?"
+  },
+  "65219e2ea1f41e626d885d0677d68215ec9edc32c780417682e2a11b88652cc0": {
+    "describe": {
+      "columns": [
+        {
+          "name": "word",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "read_word",
+          "ordinal": 1,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT word,read_word FROM dict"
+  },
+  "70c1fa98ff295ea1208a4a20d8e0288e00b30620cfe6bb978566162a6e2086bc": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "DELETE FROM speakers"
+  },
+  "8a8b1e4ba867552dda3ba94d7614edfdc831ca672e572a7d07d865b269cf9ad2": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "DELETE FROM sqlite_sequence WHERE name = 'speakers'"
+  },
+  "915e81983cd481034f1d475024ffd61d8fee6b6b97332d099edd581f5b6876d3": {
+    "describe": {
+      "columns": [
+        {
+          "name": "name",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "style_name",
+          "ordinal": 1,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "SELECT name,style_name FROM speakers WHERE generator_type = ? AND style_id = ?"
+  },
+  "958a63e4931fa853817b7d689098f4de303be821080e35e944eb977a140a4ab2": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "DELETE FROM dict WHERE word = ?"
+  },
+  "cace3c8658a14dd2a1d53d30fef8d44235b9db2565bc7157fb24abc7f9abcbce": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "name",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "style_id",
+          "ordinal": 2,
+          "type_info": "Int64"
+        },
+        {
+          "name": "style_name",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "generator_type",
+          "ordinal": 4,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT * FROM speakers"
+  },
+  "d083350b0842edc72ad9bc46b4cc79d35314447bce4953229b7c2eb47c5e3ac8": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "INSERT OR REPLACE INTO dict VALUES (?,?)"
+  },
+  "dff4e3f51569c112e670912ff2747d4a1eb49ae84a9f8ea8bc6293e4445d946c": {
+    "describe": {
+      "columns": [
+        {
+          "name": "generator_type",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "style_id",
+          "ordinal": 1,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT generator_type,style_id FROM speakers WHERE style_name = ?"
+  },
+  "e46f3141a1a4626553c18602c30b1a6a29d9d3521004cfa940284462aac407d6": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 4
+      }
+    },
+    "query": "INSERT INTO speakers (name,style_id,style_name,generator_type) VALUES (?,?,?,?)"
+  }
+}
