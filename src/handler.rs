@@ -157,15 +157,10 @@ impl EventHandler for Handler {
                 .voice_states
                 .get(bot_id)?
                 .channel_id?;
-            let channel_id = guild_id?
-                .to_guild_cached(&ctx.cache)
-                .await?
-                .voice_states
-                .get(bot_id)?
-                .channel_id?;
+
             let members_count = ctx
                 .cache
-                .channel(channel_id)
+                .channel(bot_channel_id)
                 .await?
                 .guild()?
                 .members(&ctx.cache)
@@ -193,25 +188,28 @@ impl EventHandler for Handler {
                 .as_ref()
                 .unwrap_or(&new.member.as_ref()?.user.name);
 
-            // info!(
-            //     "old = {:?}\nnew = {:?}\nbot_channel_id = {}\nbot_id = {}\nuser_id = {}",
-            //     &old, &new, bot_channel_id, bot_id, user_id
-            // );
-            let greeting_type = if let Some(ref old) = old {
-                if old.channel_id == Some(bot_channel_id) && new.channel_id != old.channel_id {
-                    1
-                } else if old.channel_id != Some(bot_channel_id) && new.channel_id == old.channel_id
-                {
-                    0
-                } else {
-                    return Some(());
-                }
-            } else {
-                0
-            };
-            //info!("greeting_type = {}", greeting_type);
-            let uid = user_id.0 as i64;
+            info!(
+                "old = {:?}\nnew = {:?}\nbot_channel_id = {}\nbot_id = {}\nuser_id = {}",
+                &old, &new, bot_channel_id, bot_id, user_id
+            );
 
+            // bye iff old.is_some and (new.channel neq old.channel) and (old.channel = bot.channel)
+            // hello iff (new.channel = bot.channel) and (old.is_none or old.channel != bot.channel)
+
+            let greeting_type = if old.is_some()
+                && new.channel_id != old.as_ref().unwrap().channel_id
+                && old.as_ref().unwrap().channel_id == Some(bot_channel_id)
+            {
+                1
+            } else if new.channel_id == Some(bot_channel_id)
+                && (old.is_none() || old.unwrap().channel_id != Some(bot_channel_id))
+            {
+                0
+            } else {
+                return Some(());
+            };
+
+            let uid = user_id.0 as i64;
             let user_config = self.database.get_user_config_or_default(uid).await.unwrap();
             let nickname = user_config
                 .read_nickname

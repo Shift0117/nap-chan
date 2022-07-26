@@ -64,8 +64,8 @@ impl UserConfigDB for sqlx::SqlitePool {
                     .execute(self)
                     .await?;
                 Ok(UserConfig::from_user_id(user_id))
-            },
-            Ok(q) => Ok(q)
+            }
+            Ok(q) => Ok(q),
         }
     }
     async fn update_user_config(&self, user_config: &UserConfig) -> Result<u64> {
