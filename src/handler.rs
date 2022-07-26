@@ -34,44 +34,6 @@ use crate::{
     },
 };
 
-#[derive(Clone, Copy, Hash)]
-pub enum Generators {
-    COEIROINK = 0,
-    VOICEVOX = 1,
-}
-impl TryFrom<&str> for Generators {
-    type Error = anyhow::Error;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
-            "COEIROINK" => Ok(Self::COEIROINK),
-            "VOICEVOX" => Ok(Self::VOICEVOX),
-            _ => Err(anyhow!("no such generator_type")),
-        }
-    }
-}
-
-impl TryFrom<u8> for Generators {
-    type Error = anyhow::Error;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Self::COEIROINK),
-            1 => Ok(Self::VOICEVOX),
-            _ => Err(anyhow!("no such generator_type")),
-        }
-    }
-}
-
-impl Into<&str> for Generators {
-    fn into(self) -> &'static str {
-        match self {
-            Self::COEIROINK => "COEIROINK",
-            Self::VOICEVOX => "VOICEVOX",
-        }
-    }
-}
-
 pub struct Handler {
     pub database: sqlx::SqlitePool,
     pub read_channel_id: Arc<Mutex<Option<serenity::model::id::ChannelId>>>,
@@ -84,7 +46,7 @@ pub struct SlashCommandTextResult {
     read: bool,
     format: bool,
     voice_type: Option<u32>,
-    generator_type: Option<u8>,
+    generator_type: Option<usize>,
 }
 
 impl SlashCommandTextResult {
@@ -300,7 +262,7 @@ impl EventHandler for Handler {
                                 content.voice_type.unwrap_or(user_config.voice_type as u32);
                             let generator_type = content
                                 .generator_type
-                                .unwrap_or(user_config.generator_type as u8);
+                                .unwrap_or(user_config.generator_type as usize);
                             if let Err(e) = play_raw_voice(
                                 &ctx,
                                 &msg,
@@ -356,31 +318,84 @@ impl EventHandler for Handler {
                         .ok();
                 }
                 "set_voice_type" => {
-                    let speakers = self.database.get_all_speakers().await.unwrap();
-                    info!("{:?}", &speakers);
-                    let generators = ["COEIROINK", "VOICEVOX"];
-                    let menus = generators
-                        .iter()
-                        .filter(|&&gen| speakers.iter().any(|x| x.generator_type == gen))
-                        .map(|&gen| {
-                            CreateSelectMenu::default()
-                                .options(|os| {
-                                    for speaker in
-                                        speakers.iter().filter(|x| x.generator_type == gen)
-                                    {
-                                        os.create_option(|o| {
-                                            o.label(format!(
-                                                "{} {}",
-                                                speaker.name, speaker.style_name
-                                            ))
-                                            .value(speaker.id)
-                                        });
-                                    }
-                                    os
-                                })
-                                .custom_id(gen)
-                                .clone()
-                        });
+                    let speakers_numbers = self.database.get_all_speakers().await.unwrap().len();
+                    let mut menus = Vec::new();
+                    for (idx, is) in (1..=speakers_numbers)
+                        .collect::<Vec<_>>()
+                        .chunks(25)
+                        .enumerate()
+                    {
+                        let mut speakers = Vec::new();
+                        for i in is {
+                            if let Ok(speaker) = self.database.get_speaker(*i).await {
+                                speakers.push((speaker, i));
+                            }
+                        }
+                        let menu = CreateSelectMenu::default()
+                            .options(|os| {
+                                for (speaker, id) in speakers {
+                                    os.create_option(|op| {
+                                        op.label(format!("{} {}", speaker.name, speaker.style_name))
+                                            .value(id)
+                                    });
+                                }
+                                os
+                            })
+                            .custom_id(idx)
+                            .clone();
+                        menus.push(menu);
+                    }
+                    // let menus = (0..speakers_numbers).collect::<Vec<_>>().chunks(25).map(async move |is| {
+                    //     let mut speakers = Vec::new();
+                    //     for i in is {
+                    //         speakers.push(self.database.get_speaker(i).await);
+                    //     }
+                    //     CreateSelectMenu::default().options(|os| {
+                    //         for speaker in speakers {
+                    //             os.create_option(|op| {
+                    //                 op.label(format!("{} {}",speaker.name,speaker.style_name)).value(speaker.id)
+                    //             });
+                    //         }
+                    //         os
+                    //     }).custom_id(0).clone()
+                    // });
+                    // let menus = self.database.get_all_speakers().await.unwrap().chunks(25).map(|speakers| {
+                    //     CreateSelectMenu::default().options(|os| {
+                    //         for speaker in speakers {
+                    //             os.create_option(|op| {
+                    //                 op.label(format!("{} {}",speaker.name,speaker.style_name)).value(speaker.id)
+                    //             });
+                    //         }
+                    //         os
+                    //     }).custom_id(0).clone()
+                    // });
+                    // for speakers in self.database.get_all_speakers().await.unwrap().chunks(25) {
+
+                    // }
+                    // info!("{:?}", &speakers);
+                    // let generators = ["COEIROINK", "VOICEVOX"];
+                    // let menus = generators
+                    //     .iter()
+                    //     .filter(|&&gen| speakers.iter().any(|x| x.generator_type == gen))
+                    //     .map(|&gen| {
+                    //         CreateSelectMenu::default()
+                    //             .options(|os| {
+                    //                 for speaker in
+                    //                     speakers.iter().filter(|x| x.generator_type == gen)
+                    //                 {
+                    //                     os.create_option(|o| {
+                    //                         o.label(format!(
+                    //                             "{} {}",
+                    //                             speaker.name, speaker.style_name
+                    //                         ))
+                    //                         .value(speaker.id)
+                    //                     });
+                    //                 }
+                    //                 os
+                    //             })
+                    //             .custom_id(gen)
+                    //             .clone()
+                    //     });
                     let e = command
                         .create_interaction_response(&ctx.http, |response| {
                             response
@@ -438,8 +453,7 @@ impl EventHandler for Handler {
                     .get_user_config_or_default(user_id as i64)
                     .await
                     .unwrap();
-                user_config.generator_type =
-                    Generators::try_from(generator_type.as_str()).unwrap() as i64;
+                user_config.generator_type = generator_type;
                 user_config.voice_type = style_id;
                 self.database
                     .update_user_config(&user_config)
