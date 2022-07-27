@@ -326,6 +326,7 @@ impl EventHandler for Handler {
                         .enumerate()
                     {
                         let mut speakers = Vec::new();
+                        speakers.reserve(speakers_numbers);
                         for i in is {
                             if let Ok(speaker) = self.database.get_speaker(*i).await {
                                 speakers.push((speaker, i));

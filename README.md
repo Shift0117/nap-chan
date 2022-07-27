@@ -1,5 +1,7 @@
 # nap-chan
-[nakochan](https://github.com/niuez/nakochan) を Rust で書くことを目的として作られた、 discord の voicevox/coeiroink を使った読み上げ bot です。
+[nakochan](https://github.com/niuez/nakochan) を Rust で書くことを目的として作られた、 discord の読み上げ bot です。
+VOICEVOX api と同じ形式の任意のアプリに対応しています。(e.g. COEIROINK)
+複数のアプリの同時起動にも対応しています。
 
 # 導入方法
 [install.md](./install.md)を参照してください。
