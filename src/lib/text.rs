@@ -103,6 +103,7 @@ fn hiraganize_test() {
     let word = "hello".to_string();
     assert_eq!("ハロー".to_string(), word.hiraganize());
 
+    // remove space
     let sentence = "hello world".to_string();
     assert_eq!("ハローワールドゥ".to_string(), sentence.hiraganize());
 
