@@ -36,26 +36,37 @@ impl TextMessage for String {
         text
     }
     fn hiraganize(&self) -> Self {
+        let re_statement = regex::Regex::new(r"[a-zA-Z]+(\s+[a-zA-Z]+)*").unwrap();
         let re = regex::Regex::new(r"[a-zA-Z]+").unwrap();
         let mut text = self.clone();
-        for c in re.captures_iter(self) {
-            if let Some(english_match) = c.get(0) {
-                let english = english_match.as_str();
-                let result = ALKANA.get_katakana(english);
-                let mut temp = english.to_string();
-                if let Some(result) = result {
-                    temp = result;
-                } else {
-                    let katakana = to_katakana(english);
-                    if is_katakana(&katakana) {
-                        temp = katakana;
-                    } else if let Some(words) = min_split(english) {
-                        for word in words.iter() {
-                            temp = temp.replacen(word, &ALKANA.get_katakana(word).unwrap(), 1);
+        for c2 in re_statement.captures_iter(self) {
+            if let Some(statement_match) = c2.get(0) {
+                let eng_statement = statement_match.as_str();
+                let mut hira_statement = String::new();
+                for c in re.captures_iter(eng_statement) {
+                    if let Some(english_match) = c.get(0) {
+                        let english = english_match.as_str();
+                        let result = ALKANA.get_katakana(english);
+                        let mut temp = english.to_string();
+                        if let Some(result) = result {
+                            temp = result;
+                        } else {
+                            let katakana = to_katakana(english);
+                            if is_katakana(&katakana) {
+                                temp = katakana;
+                            } else if let Some(words) = min_split(english) {
+                                for word in words.iter() {
+                                    //temp = temp.replacen(word, &ALKANA.get_katakana(word).unwrap(), 1);
+                                    temp =
+                                        temp.replacen(word, &ALKANA.get_katakana(word).unwrap(), 1);
+                                }
+                            }
                         }
+                        hira_statement.push_str(&temp);
+                        //text = text.replacen(english, &temp, 1);
                     }
                 }
-                text = text.replacen(english, &temp, 1);
+                text = text.replacen(eng_statement, &hira_statement, 1);
             }
         }
         text
@@ -94,14 +105,18 @@ fn hiraganize_test() {
     let word = "hello".to_string();
     assert_eq!("ハロー".to_string(), word.hiraganize());
 
+    // remove space
     let sentence = "hello world".to_string();
-    assert_eq!("ハロー ワールドゥ".to_string(), sentence.hiraganize());
+    assert_eq!("ハローワールドゥ".to_string(), sentence.hiraganize());
 
     let hiragana = "はろーわーるど".to_string();
     assert_eq!("はろーわーるど".to_string(), hiragana.hiraganize());
 
     let mixed = "hello てすと world".to_string();
     assert_eq!("ハロー てすと ワールドゥ".to_string(), mixed.hiraganize());
+
+    let mixed = "hello test world".to_string();
+    assert_eq!("ハローテストゥワールドゥ".to_string(), mixed.hiraganize());
 
     let romaji = "honyaraka".to_string();
     assert_eq!("ホニャラカ", romaji.hiraganize());
