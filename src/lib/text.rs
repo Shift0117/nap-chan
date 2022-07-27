@@ -56,7 +56,9 @@ impl TextMessage for String {
                                 temp = katakana;
                             } else if let Some(words) = min_split(english) {
                                 for word in words.iter() {
-                                    temp = temp.replacen(word, &ALKANA.get_katakana(word).unwrap(), 1);
+                                    //temp = temp.replacen(word, &ALKANA.get_katakana(word).unwrap(), 1);
+                                    temp =
+                                        temp.replacen(word, &ALKANA.get_katakana(word).unwrap(), 1);                                    
                                 }
                             }
                         }
@@ -111,7 +113,10 @@ fn hiraganize_test() {
     assert_eq!("はろーわーるど".to_string(), hiragana.hiraganize());
 
     let mixed = "hello てすと world".to_string();
-    assert_eq!("ハローてすとワールドゥ".to_string(), mixed.hiraganize());
+    assert_eq!("ハロー てすと ワールドゥ".to_string(), mixed.hiraganize());
+
+    let mixed = "hello test world".to_string();
+    assert_eq!("ハローテストワールドゥ".to_string(), mixed.hiraganize());
 
     let romaji = "honyaraka".to_string();
     assert_eq!("ホニャラカ", romaji.hiraganize());
