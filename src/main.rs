@@ -6,8 +6,8 @@ use serenity::client::ClientBuilder;
 use serenity::http::Http;
 use serenity::{async_trait, framework::StandardFramework};
 use songbird::{Event, EventContext, SerenityInit};
-
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -45,13 +45,10 @@ async fn main() {
         .with_max_level(tracing::Level::INFO)
         .init();
     dotenv().ok();
+    let database_url = std::env::var("DATABASE_URL").unwrap();
     let database = sqlx::sqlite::SqlitePoolOptions::new()
         .max_connections(10)
-        .connect_with(
-            sqlx::sqlite::SqliteConnectOptions::new()
-                .filename("database.sqlite")
-                .create_if_missing(true),
-        )
+        .connect_with(sqlx::sqlite::SqliteConnectOptions::from_str(&database_url).unwrap())
         .await
         .expect("Couldn't connect to database");
 
