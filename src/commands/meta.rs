@@ -5,8 +5,8 @@ use anyhow::{anyhow, Result};
 use serenity::{
     client::Context,
     model::{
+        application::interaction::application_command::ApplicationCommandInteraction,
         id::{ChannelId, GuildId},
-        interactions::application_command::ApplicationCommandInteraction,
     },
 };
 use songbird::{Event, TrackEvent};
@@ -29,7 +29,6 @@ pub async fn join(
     let text_channel_id = command.channel_id;
     let channel_id = guild_id
         .to_guild_cached(&ctx.cache)
-        
         .ok_or_else(|| anyhow!("guild not found"))?
         .voice_states
         .get(&author_id)

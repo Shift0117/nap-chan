@@ -5,16 +5,15 @@ use serenity::{
     builder::CreateSelectMenu,
     client::{Context, EventHandler},
     model::{
-        channel::Message,
-        id::GuildId,
-        interactions::{
-            application_command::{
-                ApplicationCommandInteraction, ApplicationCommandInteractionDataOptionValue,
+        application::{
+            component::ComponentType,
+            interaction::application_command::{
+                ApplicationCommandInteraction, CommandDataOptionValue,
             },
-            message_component::ComponentType,
-            Interaction, InteractionResponseType,
+            interaction::{Interaction, InteractionResponseType},
         },
-        prelude::{Ready, VoiceState, VoiceStateUpdateEvent},
+        channel::Message,
+        prelude::{Ready, VoiceState},
     },
 };
 use std::{convert::TryInto, sync::Arc};
@@ -39,7 +38,7 @@ pub struct Handler {
     pub read_channel_id: Arc<Mutex<Option<serenity::model::id::ChannelId>>>,
 }
 pub type Command = ApplicationCommandInteraction;
-pub type ArgumentValue = ApplicationCommandInteractionDataOptionValue;
+pub type ArgumentValue = CommandDataOptionValue;
 #[derive(Clone)]
 pub struct SlashCommandTextResult {
     msg: String,
@@ -104,12 +103,7 @@ impl EventHandler for Handler {
 
         tracing::info!("{} is connected!", ready.user.name);
     }
-    async fn voice_state_update(
-        &self,
-        ctx: Context,
-        old: Option<VoiceState>,
-        new: VoiceState,
-    ) {
+    async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
         let bot_id = &ctx.cache.current_user_id();
         let guild_id = new.guild_id;
         let _ = async move {
@@ -200,7 +194,7 @@ impl EventHandler for Handler {
         .await;
     }
     async fn message(&self, ctx: Context, msg: Message) {
-        info!("{:?}",&msg);
+        info!("{:?}", &msg);
         let guild = msg.guild(&ctx.cache).unwrap();
         let bot_id = ctx.cache.current_user_id();
         let voice_channel_id = guild

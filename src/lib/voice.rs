@@ -33,7 +33,7 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) -> Resul
                 .unwrap_or(&msg.author.name)
                 .to_string(),
         );
-    let cleaned_content = content_safe(&ctx.cache, msg.content.clone(), &clean_option,&[])
+    let cleaned_content = content_safe(&ctx.cache, msg.content.clone(), &clean_option, &[])
         .make_read_text(&handler.database)
         .await;
     info!("{}", &cleaned_content);

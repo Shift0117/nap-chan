@@ -2,10 +2,8 @@ mod commands;
 mod handler;
 mod lib;
 use dotenv::dotenv;
-use serenity::Client;
-use serenity::client::ClientBuilder;
-use serenity::http::Http;
 use serenity::prelude::GatewayIntents;
+use serenity::Client;
 use serenity::{async_trait, framework::StandardFramework};
 use songbird::{Event, EventContext, SerenityInit};
 use std::path::Path;
@@ -53,18 +51,25 @@ async fn main() {
         .connect_with(sqlx::sqlite::SqliteConnectOptions::from_str(&database_url).unwrap())
         .await
         .expect("Couldn't connect to database");
-    
+
     sqlx::migrate!("./migrations")
         .run(&database)
         .await
         .expect("Couldn't run database migrations");
     let _ = database.insert_speaker_data().await;
-    let application_id:String = std::env::var("APP_ID").unwrap().parse().unwrap();
+    let _application_id: String = std::env::var("APP_ID").unwrap().parse().unwrap();
     let token = std::env::var("DISCORD_TOKEN").expect("environment variable not found");
     let framework = StandardFramework::new();
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
-    let mut client = Client::builder(&token, intents).event_handler(Handler {database,read_channel_id: Arc::new(Mutex::new(None))})
-        .framework(framework).register_songbird().await.expect("Err creating client");
+    let mut client = Client::builder(&token, intents)
+        .event_handler(Handler {
+            database,
+            read_channel_id: Arc::new(Mutex::new(None)),
+        })
+        .framework(framework)
+        .register_songbird()
+        .await
+        .expect("Err creating client");
     // let mut client =
     //     ClientBuilder::new_with_http(Http::new_with_token_application_id(&token, application_id))
     //         .event_handler(Handler {

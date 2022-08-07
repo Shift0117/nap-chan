@@ -29,7 +29,6 @@ pub async fn rand_member(command: &Command, ctx: &Context) -> Result<Member> {
     let guild = ctx
         .cache
         .guild(guild_id)
-        
         .ok_or_else(|| anyhow!("guild does not exist"))?;
     let voice_states = guild.voice_states;
     let vc_members = voice_states.keys().collect::<Vec<_>>();
@@ -38,7 +37,6 @@ pub async fn rand_member(command: &Command, ctx: &Context) -> Result<Member> {
     let user_id = vc_members[i % len];
     ctx.cache
         .member(guild_id, user_id)
-        
         .ok_or_else(|| anyhow!("member not found"))
 }
 
@@ -51,8 +49,7 @@ pub async fn help(http: &Http, command: &Command) -> Result<()> {
 
     command
         .create_interaction_response(http, |response| {
-            response
-                .interaction_response_data(|data| data.embed(|emb| emb.fields(embed_fields)))
+            response.interaction_response_data(|data| data.embed(|emb| emb.fields(embed_fields)))
         })
         .await?;
     Ok(())

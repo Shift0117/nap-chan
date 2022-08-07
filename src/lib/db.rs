@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use serde::Deserialize;
 use serenity::async_trait;
 use sqlx::{query, query_as};
