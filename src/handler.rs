@@ -14,7 +14,7 @@ use serenity::{
             message_component::ComponentType,
             Interaction, InteractionResponseType,
         },
-        prelude::{Ready, VoiceState},
+        prelude::{Ready, VoiceState, VoiceStateUpdateEvent},
     },
 };
 use std::{convert::TryInto, sync::Arc};
@@ -107,23 +107,21 @@ impl EventHandler for Handler {
     async fn voice_state_update(
         &self,
         ctx: Context,
-        guild_id: Option<GuildId>,
         old: Option<VoiceState>,
         new: VoiceState,
     ) {
-        let bot_id = &ctx.cache.current_user_id().await;
+        let bot_id = &ctx.cache.current_user_id();
+        let guild_id = new.guild_id;
         let _ = async move {
             let bot_channel_id = guild_id?
-                .to_guild_cached(&ctx.cache)
-                .await?
+                .to_guild_cached(&ctx.cache)?
                 .voice_states
                 .get(bot_id)?
                 .channel_id?;
 
             let members_count = ctx
                 .cache
-                .channel(bot_channel_id)
-                .await?
+                .channel(bot_channel_id)?
                 .guild()?
                 .members(&ctx.cache)
                 .await
@@ -202,8 +200,9 @@ impl EventHandler for Handler {
         .await;
     }
     async fn message(&self, ctx: Context, msg: Message) {
-        let guild = msg.guild(&ctx.cache).await.unwrap();
-        let bot_id = ctx.cache.current_user_id().await;
+        info!("{:?}",&msg);
+        let guild = msg.guild(&ctx.cache).unwrap();
+        let bot_id = ctx.cache.current_user_id();
         let voice_channel_id = guild
             .voice_states
             .get(&bot_id)
@@ -297,7 +296,7 @@ impl EventHandler for Handler {
                             response
                                 .kind(InteractionResponseType::ChannelMessageWithSource)
                                 .interaction_response_data(|msg| {
-                                    msg.create_embed(|emb| {
+                                    msg.embed(|emb| {
                                         emb.fields([
                                             (
                                                 "nickname",

@@ -29,7 +29,7 @@ pub async fn join(
     let text_channel_id = command.channel_id;
     let channel_id = guild_id
         .to_guild_cached(&ctx.cache)
-        .await
+        
         .ok_or_else(|| anyhow!("guild not found"))?
         .voice_states
         .get(&author_id)

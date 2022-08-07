@@ -33,8 +33,7 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) -> Resul
                 .unwrap_or(&msg.author.name)
                 .to_string(),
         );
-    let cleaned_content = content_safe(&ctx.cache, msg.content.clone(), &clean_option)
-        .await
+    let cleaned_content = content_safe(&ctx.cache, msg.content.clone(), &clean_option,&[])
         .make_read_text(&handler.database)
         .await;
     info!("{}", &cleaned_content);
@@ -43,7 +42,7 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) -> Resul
     }
     let cleaned_text = format!(
         "{} {}",
-        if msg.author.id != ctx.cache.as_ref().current_user_id().await {
+        if msg.author.id != ctx.cache.as_ref().current_user_id() {
             nickname.make_read_text(&handler.database).await
         } else {
             String::new()
@@ -65,7 +64,6 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) -> Resul
 
     let guild = msg
         .guild(&ctx.cache)
-        .await
         .ok_or_else(|| anyhow!("guild not found"))?;
     let guild_id = guild.id;
     let (_, path) = temp_file.keep()?;
