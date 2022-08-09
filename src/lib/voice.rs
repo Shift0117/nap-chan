@@ -1,6 +1,6 @@
 use std::{convert::TryInto, fs::File, io::Write};
 
-use crate::handler::{Generators, Handler};
+use crate::handler::Handler;
 use anyhow::{anyhow, Result};
 use reqwest;
 use serenity::{
@@ -12,12 +12,6 @@ use tempfile;
 use tracing::info;
 
 use super::{db::UserConfigDB, text::TextMessage};
-
-#[derive(Hash)]
-pub struct SpeakerId {
-    id: u32,
-    generator: Generators,
-}
 
 pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) -> Result<()> {
     info!("{}", &msg.content);
@@ -39,8 +33,7 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) -> Resul
                 .unwrap_or(&msg.author.name)
                 .to_string(),
         );
-    let cleaned_content = content_safe(&ctx.cache, msg.content.clone(), &clean_option)
-        .await
+    let cleaned_content = content_safe(&ctx.cache, msg.content.clone(), &clean_option, &[])
         .make_read_text(&handler.database)
         .await;
     info!("{}", &cleaned_content);
@@ -49,7 +42,7 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) -> Resul
     }
     let cleaned_text = format!(
         "{} {}",
-        if msg.author.id != ctx.cache.as_ref().current_user_id().await {
+        if msg.author.id != ctx.cache.as_ref().current_user_id() {
             nickname.make_read_text(&handler.database).await
         } else {
             String::new()
@@ -60,18 +53,17 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) -> Resul
     let user_config = handler.database.get_user_config_or_default(user_id).await?;
 
     let voice_type = user_config.voice_type.try_into()?;
-    let generator_type = user_config.generator_type.try_into()?;
+    let generator_type = user_config.generator_type;
     create_voice(
         &cleaned_text,
         voice_type,
-        generator_type,
+        generator_type as usize,
         temp_file.as_file_mut(),
     )
     .await?;
 
     let guild = msg
         .guild(&ctx.cache)
-        .await
         .ok_or_else(|| anyhow!("guild not found"))?;
     let guild_id = guild.id;
     let (_, path) = temp_file.keep()?;
@@ -95,22 +87,24 @@ pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) -> Resul
 pub async fn create_voice(
     text: &str,
     voice_type: u32,
-    generator_type: u8,
+    generator_type: usize,
     temp_file: &mut File,
 ) -> Result<()> {
-    dotenv::dotenv().ok();
-    let base_url = std::env::var(match generator_type {
-        0 => "BASE_URL_COEIRO",
-        1 => "BASE_URL_VOICEVOX",
-        _ => unreachable!(),
-    })?;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open("generators.json")?;
+
+    let generators: Vec<String> = serde_json::from_reader(file)?;
+    let url = generators[generator_type].clone();
     let params = [("text", text), ("speaker", &voice_type.to_string())];
     let client = reqwest::Client::new();
-    let voice_query_url = format!("{}/audio_query", base_url);
+    let voice_query_url = format!("{}/audio_query", url);
     let res = client.post(voice_query_url).query(&params).send().await?;
     let synthesis_body = res.text().await?;
     let synthesis_arg = [("speaker", voice_type)];
-    let synthesis_url = format!("{}/synthesis", base_url);
+    let synthesis_url = format!("{}/synthesis", url);
     let synthesis_res = client
         .post(synthesis_url)
         .body(synthesis_body)
@@ -125,7 +119,7 @@ pub async fn play_raw_voice(
     ctx: &Context,
     str: &str,
     voice_type: u32,
-    generator_type: u8,
+    generator_type: usize,
     guild_id: GuildId,
 ) -> Result<()> {
     let mut temp_file = tempfile::Builder::new().tempfile_in("temp")?;

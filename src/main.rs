@@ -2,17 +2,16 @@ mod commands;
 mod handler;
 mod lib;
 use dotenv::dotenv;
-use serenity::client::ClientBuilder;
-use serenity::http::Http;
+use serenity::prelude::GatewayIntents;
+use serenity::Client;
 use serenity::{async_trait, framework::StandardFramework};
 use songbird::{Event, EventContext, SerenityInit};
-
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::handler::Handler;
-use crate::lib::db::SpeakerDB;
 
 #[derive(Debug)]
 pub struct Dict {
@@ -45,13 +44,10 @@ async fn main() {
         .with_max_level(tracing::Level::INFO)
         .init();
     dotenv().ok();
+    let database_url = std::env::var("DATABASE_URL").unwrap();
     let database = sqlx::sqlite::SqlitePoolOptions::new()
         .max_connections(10)
-        .connect_with(
-            sqlx::sqlite::SqliteConnectOptions::new()
-                .filename("database.sqlite")
-                .create_if_missing(true),
-        )
+        .connect_with(sqlx::sqlite::SqliteConnectOptions::from_str(&database_url).unwrap())
         .await
         .expect("Couldn't connect to database");
 
@@ -59,20 +55,23 @@ async fn main() {
         .run(&database)
         .await
         .expect("Couldn't run database migrations");
-    let _ = database.insert_speaker_data().await;
-    let application_id = std::env::var("APP_ID").unwrap().parse().unwrap();
+    let voice_types = lib::db::get_voice_types()
+        .await
+        .expect("Couldn't get voice types");
+    let _application_id: String = std::env::var("APP_ID").unwrap().parse().unwrap();
     let token = std::env::var("DISCORD_TOKEN").expect("environment variable not found");
     let framework = StandardFramework::new();
-    let mut client =
-        ClientBuilder::new_with_http(Http::new_with_token_application_id(&token, application_id))
-            .event_handler(Handler {
-                database,
-                read_channel_id: Arc::new(Mutex::new(None)),
-            })
-            .framework(framework)
-            .register_songbird()
-            .await
-            .expect("Err creating client");
+    let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
+    let mut client = Client::builder(&token, intents)
+        .event_handler(Handler {
+            database,
+            read_channel_id: Arc::new(Mutex::new(None)),
+            voice_types: Arc::new(Mutex::new(voice_types)),
+        })
+        .framework(framework)
+        .register_songbird()
+        .await
+        .expect("Err creating client");
     std::fs::create_dir("temp").ok();
 
     tokio::spawn(async move {

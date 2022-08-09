@@ -45,9 +45,9 @@ discordの画面左の+ボタンからできます。
 1. .env.sample と同じディレクトリに .env というファイルを作成します。
 2. .env.sample に従って .env の `DATABASE_URL` にデータベースを置くパスを sqlite:PATH/filename.sqlite の形式で入力します。
 3. .env.sample に従って .env に bot の token,application id を入力します。
-4. .env.sample に従って COEIROINK が動いているアドレス(デフォルトはおそらく http://127.0.0.1:50031 ) を入力します。 (optional)
-5. .env.sample に従って VOICEVOX が動いているアドレス(デフォルトはおそらく http://127.0.0.1:50021 ) を入力します。 (optional)
-6. .env.sample に従って wolfram alpha API の id を入力します。 (optional)
+4. .env.sample に従って wolfram alpha API の id を入力します。 (optional)
+5. generators.json.sample とおなじディレクトリに generators.json というファイルを作成します。
+6. generators.json.sample に従って generators.json に音声合成アプリが起動しているサーバーの URL を入力します。
 7. cargo install sqlx-cli を実行します。
 8. cargo sqlx database create を実行します。(1.の場所に生成されます)
 9. cargo sqlx migrate run を実行します。

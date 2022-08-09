@@ -2,3 +2,4 @@
 /.env
 /temp
 /*.sql*
+/generators.json

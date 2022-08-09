@@ -1,8 +1,9 @@
 use serde::Deserialize;
 use serenity::async_trait;
 use sqlx::{query, query_as};
+use tracing::info;
 
-use crate::{handler::Generators, Dict};
+use crate::Dict;
 use anyhow::{anyhow, Result};
 
 #[async_trait]
@@ -33,13 +34,12 @@ impl UserConfig {
         }
     }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VoiceType {
-    pub id: i64,
     pub name: String,
-    pub style_id: i64,
+    pub style_id: u64,
     pub style_name: String,
-    pub generator_type: String,
+    pub generator_type: i64,
 }
 
 #[async_trait]
@@ -129,135 +129,50 @@ impl DictDB for sqlx::SqlitePool {
     }
 }
 
-#[async_trait]
-pub trait SpeakerDB {
-    async fn speaker_name_to_id(&self, name: &str) -> Result<(Generators, u32)>;
-    async fn speaker_id_to_name(&self, generator_type: Generators, id: u32) -> Result<String>;
-    async fn insert_speaker_data(&self) -> Result<()>;
-    async fn get_speaker(&self, id: usize) -> Result<VoiceType>;
-    async fn get_all_speakers(&self) -> Result<Vec<VoiceType>>;
-}
-
-#[async_trait]
-impl SpeakerDB for sqlx::SqlitePool {
-    async fn speaker_name_to_id(&self, name: &str) -> Result<(Generators, u32)> {
-        let mut tx = self.begin().await.unwrap();
-        let q = query!(
-            "SELECT generator_type,style_id FROM speakers WHERE style_name = ?",
-            name
-        )
-        .fetch_one(&mut tx)
-        .await?;
-        tx.commit().await?;
-        Ok((
-            Generators::try_from(q.generator_type.as_str())?,
-            q.style_id as u32,
-        ))
+pub async fn get_voice_types() -> Result<Vec<VoiceType>> {
+    #[derive(Deserialize, Clone, Debug)]
+    struct Style {
+        pub name: String,
+        pub id: u64,
     }
-    async fn speaker_id_to_name(&self, generator_type: Generators, id: u32) -> Result<String> {
-        let mut tx = self.begin().await.unwrap();
-        let str: &str = generator_type.into();
-        let q = query!(
-            "SELECT name,style_name FROM speakers WHERE generator_type = ? AND style_id = ?",
-            str,
-            id
-        )
-        .fetch_one(&mut tx)
-        .await?;
-        tx.commit().await?;
-        Ok(format!("{} {}", q.name, q.style_name))
+    #[derive(Deserialize, Clone, Debug)]
+    struct Speaker {
+        pub name: String,
+        pub styles: Vec<Style>,
     }
-    async fn insert_speaker_data(&self) -> Result<()> {
-        dotenv::dotenv().ok();
-        #[derive(Deserialize, Clone)]
-        struct Style {
-            pub name: String,
-            pub id: u32,
-        }
-        #[derive(Deserialize, Clone)]
-        struct Speaker {
-            pub name: String,
-            pub styles: Vec<Style>,
-        }
 
-        let mut tx = self.begin().await.unwrap();
-        query!("DELETE FROM speakers")
-            .execute(&mut tx)
-            .await
-            .unwrap();
-        query!("DELETE FROM sqlite_sequence WHERE name = 'speakers'")
-            .execute(&mut tx)
-            .await
-            .unwrap();
-        let voicevox_voice_types: Result<Vec<Speaker>> = async {
-            let base_url = std::env::var("BASE_URL_VOICEVOX")?;
-            let query_url = format!("{}/speakers", base_url);
-            let client = reqwest::Client::new();
-            let res = client.get(query_url).send().await?;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open("generators.json")?;
 
-            //info!("{:?}",res.text().await);
-            res.json().await.map_err(|e| e.into())
-        }
-        .await;
-        if let Ok(voicevox_voice_types) = voicevox_voice_types {
-            for speaker in voicevox_voice_types {
-                for style in speaker.styles {
-                    query!(
-                        "INSERT INTO speakers (name,style_id,style_name,generator_type) VALUES (?,?,?,?)",
-                        speaker.name,
-                        style.id,
-                        style.name,
-                        "VOICEVOX"
-                    )
-                    .execute(&mut tx)
-                    .await
-                    .unwrap();
-                }
-            }
-        }
-        let coeiro_voice_types: Result<Vec<Speaker>> = async {
-            let base_url = std::env::var("BASE_URL_COEIRO")?;
-            let query_url = format!("{}/speakers", base_url);
+    let generators: Vec<String> = serde_json::from_reader(file)?;
+
+    info!("generators = {:?}", &generators);
+    let mut voice_types = Vec::new();
+
+    for (generator_type, url) in generators.iter().enumerate() {
+        let speakers: Result<Vec<Speaker>> = async {
+            let query_url = format!("{}/speakers", url);
             let client = reqwest::Client::new();
             let res = client.get(query_url).send().await?;
             res.json().await.map_err(|e| e.into())
         }
         .await;
-        if let Ok(coeiro_voice_types) = coeiro_voice_types {
-            for speaker in coeiro_voice_types {
+        info!("{:?}", &speakers);
+        if let Ok(speakers) = speakers {
+            for speaker in speakers {
                 for style in speaker.styles {
-                    query!(
-                        "INSERT INTO speakers (name,style_id,style_name,generator_type) VALUES (?,?,?,?)",
-                        speaker.name,
-                        style.id,
-                        style.name,
-                        "COEIROINK"
-                    )
-                    .execute(&mut tx)
-                    .await
-                    .unwrap();
+                    voice_types.push(VoiceType {
+                        name: speaker.name.clone(),
+                        style_id: style.id,
+                        style_name: style.name,
+                        generator_type: generator_type as i64,
+                    });
                 }
             }
         }
-        tx.commit().await?;
-        Ok(())
     }
-    async fn get_speaker(&self, id: usize) -> Result<VoiceType> {
-        let id = id as i64;
-        let mut tx = self.begin().await?;
-        let q = query_as!(VoiceType, "SELECT * FROM speakers WHERE id = ?", id)
-            .fetch_one(&mut tx)
-            .await?;
-        tx.commit().await?;
-
-        Ok(q)
-    }
-    async fn get_all_speakers(&self) -> Result<Vec<VoiceType>> {
-        let mut tx = self.begin().await?;
-        let q = query_as!(VoiceType, "SELECT * FROM speakers")
-            .fetch_all(&mut tx)
-            .await?;
-        tx.commit().await?;
-        Ok(q)
-    }
+    Ok(voice_types)
 }
