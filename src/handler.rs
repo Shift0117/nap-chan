@@ -15,8 +15,9 @@ use serenity::{
         channel::Message,
         prelude::{Ready, VoiceState},
     },
+    utils::ContentSafeOptions,
 };
-use std::{convert::TryInto, sync::Arc};
+use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::info;
 
@@ -29,7 +30,7 @@ use crate::{
     lib::{
         db::{UserConfigDB, VoiceType},
         text::TextMessage,
-        voice::{play_raw_voice, play_voice},
+        voice::VoiceOptions,
     },
 };
 
@@ -177,25 +178,39 @@ impl EventHandler for Handler {
             let text = format!("{}さん、{}", nickname, greet_text)
                 .make_read_text(&self.database)
                 .await;
-            let voice_type = user_config.voice_type.try_into().unwrap();
-            if let Err(e) = play_raw_voice(
-                &ctx,
-                &text,
-                voice_type,
-                user_config.generator_type.try_into().unwrap(),
-                guild_id?,
-            )
-            .await
+            let voice_type = user_config.voice_type;
+            let generator_type = user_config.generator_type;
+            if let Err(e) = VoiceOptions::new()
+                .voice_type(voice_type)
+                .generator_type(generator_type)
+                .play_voice(&ctx, guild_id?, text)
+                .await
             {
                 info!("{}", e);
             };
-
             Some(())
         }
         .await;
     }
     async fn message(&self, ctx: Context, msg: Message) {
         info!("{:?}", &msg);
+        let user_config = self
+            .database
+            .get_user_config_or_default(msg.author.id.0 as i64)
+            .await
+            .unwrap();
+        let voice_type = user_config.voice_type;
+        let generator_type = user_config.generator_type;
+        let nickname = user_config.read_nickname.unwrap_or_else(|| {
+            msg.member
+                .as_ref()
+                .unwrap()
+                .nick
+                .as_ref()
+                .unwrap_or(&msg.author.name)
+                .to_string()
+        });
+        info!("{:?}", &nickname);
         let guild = msg.guild(&ctx.cache).unwrap();
         let bot_id = ctx.cache.current_user_id();
         let voice_channel_id = guild
@@ -208,7 +223,15 @@ impl EventHandler for Handler {
         if read_channel_id == Some(text_channel_id) {
             if let Some(_voice_channel_id) = voice_channel_id {
                 if msg.author.id != bot_id {
-                    if let Err(e) = play_voice(&ctx, msg, self).await {
+                    if let Err(e) = VoiceOptions::new()
+                        .clean(Some(&ContentSafeOptions::new()))
+                        .dict(Some(&self.database))
+                        .read_name(Some(&nickname))
+                        .generator_type(generator_type)
+                        .voice_type(voice_type)
+                        .play_voice(&ctx, guild.id, msg.content)
+                        .await
+                    {
                         info!("{}", e)
                     };
                 };
@@ -257,14 +280,11 @@ impl EventHandler for Handler {
                             let generator_type = content
                                 .generator_type
                                 .unwrap_or(user_config.generator_type as usize);
-                            if let Err(e) = play_raw_voice(
-                                &ctx,
-                                &msg,
-                                voice_type,
-                                generator_type,
-                                command.guild_id.unwrap(),
-                            )
-                            .await
+                            if let Err(e) = VoiceOptions::new()
+                                .voice_type(voice_type as i64)
+                                .generator_type(generator_type as i64)
+                                .play_voice(&ctx, command.guild_id.unwrap(), msg)
+                                .await
                             {
                                 info!("{}", e);
                             };

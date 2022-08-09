@@ -1,87 +1,99 @@
-use std::{convert::TryInto, fs::File, io::Write};
+use std::{fs::File, io::Write};
 
-use crate::handler::Handler;
 use anyhow::{anyhow, Result};
 use reqwest;
 use serenity::{
     client::Context,
-    model::{channel::Message, id::GuildId},
+    model::id::GuildId,
     utils::{content_safe, ContentSafeOptions},
 };
+use sqlx::{Pool, Sqlite};
 use tempfile;
-use tracing::info;
 
-use super::{db::UserConfigDB, text::TextMessage};
+use super::text::TextMessage;
 
-pub async fn play_voice(ctx: &Context, msg: Message, handler: &Handler) -> Result<()> {
-    info!("{}", &msg.content);
+pub struct VoiceOptions<'a, 'b, 'c> {
+    clean: Option<&'a ContentSafeOptions>,
+    dict: Option<&'b Pool<Sqlite>>,
+    read_name: Option<&'c String>,
+    voice_type: i64,
+    generator_type: i64,
+    volume: f32,
+}
 
-    let mut temp_file = tempfile::Builder::new().tempfile_in("temp")?;
-    let clean_option = ContentSafeOptions::new();
-    let user_id = msg.author.id.0 as i64;
-    let nickname = handler
-        .database
-        .get_user_config_or_default(user_id)
-        .await?
-        .read_nickname
-        .unwrap_or(
-            msg.member
-                .as_ref()
-                .ok_or_else(|| anyhow!("member not found"))?
-                .nick
-                .as_ref()
-                .unwrap_or(&msg.author.name)
-                .to_string(),
-        );
-    let cleaned_content = content_safe(&ctx.cache, msg.content.clone(), &clean_option, &[])
-        .make_read_text(&handler.database)
-        .await;
-    info!("{}", &cleaned_content);
-    if cleaned_content.chars().all(|c| !c.is_alphanumeric()) {
-        return Ok(());
-    }
-    let cleaned_text = format!(
-        "{} {}",
-        if msg.author.id != ctx.cache.as_ref().current_user_id() {
-            nickname.make_read_text(&handler.database).await
-        } else {
-            String::new()
-        },
-        cleaned_content
-    );
-
-    let user_config = handler.database.get_user_config_or_default(user_id).await?;
-
-    let voice_type = user_config.voice_type.try_into()?;
-    let generator_type = user_config.generator_type;
-    create_voice(
-        &cleaned_text,
-        voice_type,
-        generator_type as usize,
-        temp_file.as_file_mut(),
-    )
-    .await?;
-
-    let guild = msg
-        .guild(&ctx.cache)
-        .ok_or_else(|| anyhow!("guild not found"))?;
-    let guild_id = guild.id;
-    let (_, path) = temp_file.keep()?;
-    let manager = songbird::get(ctx)
-        .await
-        .ok_or_else(|| anyhow!("Songbird Voice client placed in at initialisation."))?
-        .clone();
-    if let Some(handler_lock) = manager.get(guild_id) {
-        let mut handler = handler_lock.lock().await;
-        let mut source = songbird::ffmpeg(&path).await?;
-        source.metadata.source_url = Some(path.to_string_lossy().to_string());
-        let (mut track, _) = songbird::tracks::create_player(source);
-        if generator_type == 0 {
-            track.set_volume(0.4);
+impl<'a, 'b, 'c> VoiceOptions<'a, 'b, 'c> {
+    pub fn new() -> Self {
+        Self {
+            clean: None,
+            dict: None,
+            read_name: None,
+            voice_type: 0,
+            generator_type: 0,
+            volume: 1.,
         }
-        handler.enqueue(track);
     }
-    Ok(())
+    pub fn read_name(&mut self, read_name: Option<&'c String>) -> &mut Self {
+        self.read_name = read_name;
+        self
+    }
+    pub fn clean(&mut self, clean: Option<&'a ContentSafeOptions>) -> &mut Self {
+        self.clean = clean;
+        self
+    }
+    pub fn dict(&mut self, dict: Option<&'b Pool<Sqlite>>) -> &mut Self {
+        self.dict = dict;
+        self
+    }
+    pub fn voice_type(&mut self, voice_type: i64) -> &mut Self {
+        self.voice_type = voice_type;
+        self
+    }
+    pub fn generator_type(&mut self, generator_type: i64) -> &mut Self {
+        self.generator_type = generator_type;
+        self
+    }
+
+    pub async fn play_voice(
+        &self,
+        ctx: &Context,
+        guild_id: GuildId,
+        mut str: String,
+    ) -> Result<()> {
+        if let Some(read_name) = self.read_name {
+            str = format!("{} {}", read_name, str);
+        }
+        if let Some(options) = self.clean {
+            str = content_safe(&ctx.cache, str, options, &[]);
+        }
+        if let Some(dict) = self.dict {
+            str = str.make_read_text(dict).await;
+        }
+        if str.chars().all(|c| !c.is_alphanumeric()) {
+            return Ok(());
+        }
+        let mut temp_file = tempfile::Builder::new().tempfile_in("temp")?;
+        create_voice(
+            &str,
+            self.voice_type as u32,
+            self.generator_type as usize,
+            temp_file.as_file_mut(),
+        )
+        .await?;
+        let (_, path) = temp_file.keep()?;
+        let manager = songbird::get(ctx)
+            .await
+            .ok_or_else(|| anyhow!("Songbird Voice client placed in at initialisation."))?
+            .clone();
+        if let Some(handler_lock) = manager.get(guild_id) {
+            let mut handler = handler_lock.lock().await;
+            let mut source = songbird::ffmpeg(&path).await?;
+            source.metadata.source_url = Some(path.to_string_lossy().to_string());
+            let (mut track, _) = songbird::tracks::create_player(source);
+            track.set_volume(self.volume);
+            handler.enqueue(track);
+        }
+        Ok(())
+    }
 }
 
 pub async fn create_voice(
@@ -112,28 +124,5 @@ pub async fn create_voice(
         .send()
         .await?;
     let _ = temp_file.write(&synthesis_res.bytes().await?)?;
-    Ok(())
-}
-
-pub async fn play_raw_voice(
-    ctx: &Context,
-    str: &str,
-    voice_type: u32,
-    generator_type: usize,
-    guild_id: GuildId,
-) -> Result<()> {
-    let mut temp_file = tempfile::Builder::new().tempfile_in("temp")?;
-    create_voice(str, voice_type, generator_type, temp_file.as_file_mut()).await?;
-    let (_, path) = temp_file.keep()?;
-    let manager = songbird::get(ctx)
-        .await
-        .ok_or_else(|| anyhow!("Songbird Voice client placed in at initialisation."))?
-        .clone();
-    if let Some(handler_lock) = manager.get(guild_id) {
-        let mut handler = handler_lock.lock().await;
-        let mut source = songbird::ffmpeg(&path).await?;
-        source.metadata.source_url = Some(path.to_string_lossy().to_string());
-        handler.enqueue_source(source);
-    }
     Ok(())
 }
