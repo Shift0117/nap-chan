@@ -12,7 +12,6 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::handler::Handler;
-use crate::lib::db::SpeakerDB;
 
 #[derive(Debug)]
 pub struct Dict {
@@ -56,7 +55,9 @@ async fn main() {
         .run(&database)
         .await
         .expect("Couldn't run database migrations");
-    let _ = database.insert_speaker_data().await;
+    let voice_types = lib::db::get_voice_types()
+        .await
+        .expect("Couldn't get voice types");
     let _application_id: String = std::env::var("APP_ID").unwrap().parse().unwrap();
     let token = std::env::var("DISCORD_TOKEN").expect("environment variable not found");
     let framework = StandardFramework::new();
@@ -65,21 +66,12 @@ async fn main() {
         .event_handler(Handler {
             database,
             read_channel_id: Arc::new(Mutex::new(None)),
+            voice_types: Arc::new(Mutex::new(voice_types)),
         })
         .framework(framework)
         .register_songbird()
         .await
         .expect("Err creating client");
-    // let mut client =
-    //     ClientBuilder::new_with_http(Http::new_with_token_application_id(&token, application_id))
-    //         .event_handler(Handler {
-    //             database,
-    //             read_channel_id: Arc::new(Mutex::new(None)),
-    //         })
-    //         .framework(framework)
-    //         .register_songbird()
-    //         .await
-    //         .expect("Err creating client");
     std::fs::create_dir("temp").ok();
 
     tokio::spawn(async move {

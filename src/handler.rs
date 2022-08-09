@@ -27,7 +27,7 @@ use crate::{
         meta, util,
     },
     lib::{
-        db::{SpeakerDB, UserConfigDB},
+        db::{UserConfigDB, VoiceType},
         text::TextMessage,
         voice::{play_raw_voice, play_voice},
     },
@@ -36,6 +36,7 @@ use crate::{
 pub struct Handler {
     pub database: sqlx::SqlitePool,
     pub read_channel_id: Arc<Mutex<Option<serenity::model::id::ChannelId>>>,
+    pub voice_types: Arc<Mutex<Vec<VoiceType>>>,
 }
 pub type Command = ApplicationCommandInteraction;
 pub type ArgumentValue = CommandDataOptionValue;
@@ -277,14 +278,17 @@ impl EventHandler for Handler {
                         .get_user_config_or_default(user_id)
                         .await
                         .unwrap();
-                    let voice_name = self
-                        .database
-                        .speaker_id_to_name(
-                            (user_config.generator_type as u8).try_into().unwrap(),
-                            user_config.voice_type as u32,
-                        )
+                    let voice_type: VoiceType = self
+                        .voice_types
+                        .lock()
                         .await
-                        .unwrap();
+                        .iter()
+                        .find(|voice_type| {
+                            voice_type.generator_type == user_config.generator_type
+                                && voice_type.style_id as i64 == user_config.voice_type
+                        })
+                        .unwrap()
+                        .clone();
                     command
                         .create_interaction_response(&ctx.http, |response| {
                             response
@@ -300,7 +304,14 @@ impl EventHandler for Handler {
                                                     .unwrap_or(&get_display_name(&command)),
                                                 true,
                                             ),
-                                            ("voice", &voice_name, true),
+                                            (
+                                                "voice",
+                                                &format!(
+                                                    "{} {}",
+                                                    voice_type.name, voice_type.style_name
+                                                ),
+                                                true,
+                                            ),
                                             ("hello", &user_config.hello, true),
                                             ("bye", &user_config.bye, true),
                                         ])
@@ -311,26 +322,15 @@ impl EventHandler for Handler {
                         .ok();
                 }
                 "set_voice_type" => {
-                    let speakers_numbers = self.database.get_all_speakers().await.unwrap().len();
                     let mut menus = Vec::new();
-                    for (idx, is) in (1..=speakers_numbers)
-                        .collect::<Vec<_>>()
-                        .chunks(25)
-                        .enumerate()
-                    {
-                        let mut speakers = Vec::new();
-                        speakers.reserve(speakers_numbers);
-                        for i in is {
-                            if let Ok(speaker) = self.database.get_speaker(*i).await {
-                                speakers.push((speaker, i));
-                            }
-                        }
+                    let voice_types = self.voice_types.lock().await;
+                    for (idx, vec) in voice_types.chunks(25).enumerate() {
                         let menu = CreateSelectMenu::default()
                             .options(|os| {
-                                for (speaker, id) in speakers {
+                                for (speaker_idx, speaker) in vec.iter().enumerate() {
                                     os.create_option(|op| {
                                         op.label(format!("{} {}", speaker.name, speaker.style_name))
-                                            .value(id)
+                                            .value(speaker_idx)
                                     });
                                 }
                                 os
@@ -339,57 +339,7 @@ impl EventHandler for Handler {
                             .clone();
                         menus.push(menu);
                     }
-                    // let menus = (0..speakers_numbers).collect::<Vec<_>>().chunks(25).map(async move |is| {
-                    //     let mut speakers = Vec::new();
-                    //     for i in is {
-                    //         speakers.push(self.database.get_speaker(i).await);
-                    //     }
-                    //     CreateSelectMenu::default().options(|os| {
-                    //         for speaker in speakers {
-                    //             os.create_option(|op| {
-                    //                 op.label(format!("{} {}",speaker.name,speaker.style_name)).value(speaker.id)
-                    //             });
-                    //         }
-                    //         os
-                    //     }).custom_id(0).clone()
-                    // });
-                    // let menus = self.database.get_all_speakers().await.unwrap().chunks(25).map(|speakers| {
-                    //     CreateSelectMenu::default().options(|os| {
-                    //         for speaker in speakers {
-                    //             os.create_option(|op| {
-                    //                 op.label(format!("{} {}",speaker.name,speaker.style_name)).value(speaker.id)
-                    //             });
-                    //         }
-                    //         os
-                    //     }).custom_id(0).clone()
-                    // });
-                    // for speakers in self.database.get_all_speakers().await.unwrap().chunks(25) {
 
-                    // }
-                    // info!("{:?}", &speakers);
-                    // let generators = ["COEIROINK", "VOICEVOX"];
-                    // let menus = generators
-                    //     .iter()
-                    //     .filter(|&&gen| speakers.iter().any(|x| x.generator_type == gen))
-                    //     .map(|&gen| {
-                    //         CreateSelectMenu::default()
-                    //             .options(|os| {
-                    //                 for speaker in
-                    //                     speakers.iter().filter(|x| x.generator_type == gen)
-                    //                 {
-                    //                     os.create_option(|o| {
-                    //                         o.label(format!(
-                    //                             "{} {}",
-                    //                             speaker.name, speaker.style_name
-                    //                         ))
-                    //                         .value(speaker.id)
-                    //                     });
-                    //                 }
-                    //                 os
-                    //             })
-                    //             .custom_id(gen)
-                    //             .clone()
-                    //     });
                     let e = command
                         .create_interaction_response(&ctx.http, |response| {
                             response
@@ -437,10 +387,10 @@ impl EventHandler for Handler {
         } else if let Interaction::MessageComponent(msg) = interaction {
             if let ComponentType::SelectMenu = msg.data.component_type {
                 info!("{:?}", msg.data.values);
-                let id: i64 = msg.data.values[0].parse().unwrap();
-                let q = self.database.get_speaker(id as usize).await.unwrap();
-                let generator_type = q.generator_type;
-                let style_id = q.style_id;
+                let idx = msg.data.values[0].parse::<usize>().unwrap();
+                let voice_type = &self.voice_types.lock().await[idx];
+                let generator_type = voice_type.generator_type;
+                let style_id = voice_type.style_id;
                 let user_id = msg.user.id.0;
                 let mut user_config = self
                     .database
@@ -448,7 +398,7 @@ impl EventHandler for Handler {
                     .await
                     .unwrap();
                 user_config.generator_type = generator_type;
-                user_config.voice_type = style_id;
+                user_config.voice_type = style_id as i64;
                 self.database
                     .update_user_config(&user_config)
                     .await
