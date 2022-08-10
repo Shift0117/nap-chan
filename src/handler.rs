@@ -219,7 +219,6 @@ impl EventHandler for Handler {
             .and_then(|voice_states| voice_states.channel_id);
         let text_channel_id = msg.channel_id;
         let read_channel_id = *self.read_channel_id.lock().await;
-        info!("msg = {:?}", &msg);
         if read_channel_id == Some(text_channel_id) {
             if let Some(_voice_channel_id) = voice_channel_id {
                 if msg.author.id != bot_id {
@@ -232,7 +231,7 @@ impl EventHandler for Handler {
                         .play_voice(&ctx, guild.id, msg.content)
                         .await
                     {
-                        info!("{}", e)
+                        info!("error: {}", e)
                     };
                 };
             }
@@ -350,7 +349,7 @@ impl EventHandler for Handler {
                                 for (speaker_idx, speaker) in vec.iter().enumerate() {
                                     os.create_option(|op| {
                                         op.label(format!("{} {}", speaker.name, speaker.style_name))
-                                            .value(speaker_idx)
+                                            .value(speaker_idx + 25 * idx)
                                     });
                                 }
                                 os
