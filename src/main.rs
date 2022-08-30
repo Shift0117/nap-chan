@@ -1,5 +1,4 @@
 mod commands;
-mod handler;
 
 mod lib;
 pub mod listener;
@@ -7,7 +6,8 @@ use dotenv::dotenv;
 use poise::serenity_prelude as serenity;
 type Context<'a> = poise::Context<'a, Data, anyhow::Error>;
 
-use songbird::{Event, EventContext, SerenityInit};
+use songbird::{Event, EventContext};
+use tracing::info;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -101,6 +101,12 @@ async fn main() {
                 commands::meta::leave(),
                 commands::meta::mute(),
                 commands::meta::unmute(),
+                commands::user_config::set_hello(),
+                commands::user_config::set_bye(),
+                commands::user_config::set_nickname(),
+                commands::user_config::set_voice_type(),
+                commands::dict::add(),
+                commands::dict::rem()
             ],
             prefix_options: poise::PrefixFrameworkOptions {
                 prefix: Some("~".into()),
@@ -125,30 +131,10 @@ async fn main() {
             })
         })
         .client_settings(songbird::register);
-
-    framework.run().await.unwrap();
-    // let framework = StandardFramework::new();
-    // let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
-    // let mut client = Client::builder(&token, intents)
-    //     .event_handler(Handler {
-    //         database,
-    //         read_channel_id: Arc::new(Mutex::new(None)),
-    //         voice_types: Arc::new(Mutex::new(voice_types)),
-    //     })
-    //     .framework(framework)
-    //     .register_songbird()
-    //     .await
-    //     .expect("Err creating client");
-    // std::fs::create_dir("temp").ok();
-
-    // tokio::spawn(async move {
-    //     let _ = client
-    //         .start()
-    //         .await
-    //         .map_err(|why| tracing::info!("Client ended: {:?}", why));
-    // });
-    // tokio::signal::ctrl_c().await.unwrap();
-    // std::fs::remove_dir_all("temp").unwrap();
-    // std::fs::create_dir("temp").unwrap();
-    // tracing::info!("Ctrl-C received, shutting down...");
+    std::fs::create_dir("temp").ok();
+    if let Err(e) = framework.run().await {
+        info!("{:?}",e)
+    };
+    std::fs::remove_dir_all("temp").unwrap();
+    std::fs::create_dir("temp").unwrap();
 }

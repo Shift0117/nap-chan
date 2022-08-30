@@ -1,4 +1,3 @@
-pub mod definition;
-pub mod interactions;
+pub mod dict;
 pub mod meta;
-pub mod util;
+pub mod user_config;

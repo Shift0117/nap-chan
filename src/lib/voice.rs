@@ -60,7 +60,7 @@ impl<'a, 'b, 'c> VoiceOptions<'a, 'b, 'c> {
         guild_id: GuildId,
         mut str: String,
     ) -> Result<()> {
-        tracing::info!("voice setting: {:?}",&self);
+        tracing::info!("voice setting: {:?}", &self);
         if let Some(read_name) = self.read_name {
             str = format!("{} {}", read_name, str);
         }

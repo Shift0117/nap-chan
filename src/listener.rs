@@ -3,13 +3,13 @@ use crate::{
     Data,
 };
 use anyhow::{anyhow, Result};
-use poise::serenity_prelude::{self as serenity, VoiceState};
+use poise::serenity_prelude::{self as serenity, MessageComponentInteraction, VoiceState};
 use tracing::info;
 
 pub async fn event_listener(
     ctx: &serenity::Context,
     event: &poise::Event<'_>,
-    framework: poise::FrameworkContext<'_, crate::Data, anyhow::Error>,
+    _framework: poise::FrameworkContext<'_, crate::Data, anyhow::Error>,
     user_data: &Data,
 ) -> Result<(), anyhow::Error> {
     match event {
@@ -18,6 +18,12 @@ pub async fn event_listener(
         poise::Event::VoiceStateUpdate { old, new } => {
             voice_state_update(ctx, old, new, user_data).await?
         }
+        poise::Event::InteractionCreate { interaction } => match interaction {
+            serenity::Interaction::MessageComponent(message_component) => {
+                select_menu(ctx, message_component, user_data).await?;
+            }
+            _ => (),
+        },
         _ => {}
     }
     Ok(())
@@ -186,5 +192,36 @@ async fn voice_state_update(
     {
         info!("{}", e);
     };
+    Ok(())
+}
+
+async fn select_menu(
+    ctx: &serenity::Context,
+    message_component: &MessageComponentInteraction,
+    user_data: &Data,
+) -> Result<()> {
+    let idx = message_component.data.values[0].parse::<usize>().unwrap();
+    let voice_type = &user_data.voice_types.lock().await[idx];
+    let generator_type = voice_type.generator_type;
+    let style_id = voice_type.style_id;
+    let user_id = message_component.user.id.0;
+    let mut user_config = user_data
+        .database
+        .get_user_config_or_default(user_id as i64)
+        .await
+        .unwrap();
+    user_config.generator_type = generator_type;
+    user_config.voice_type = style_id as i64;
+    user_data
+        .database
+        .update_user_config(&user_config)
+        .await
+        .unwrap();
+    let res = message_component
+        .create_interaction_response(&ctx.http, |res| {
+            res.kind(serenity::InteractionResponseType::UpdateMessage)
+        })
+        .await;
+    info!("{:?}", res);
     Ok(())
 }
