@@ -104,14 +104,15 @@ pub async fn create_voice(
     generator_type: usize,
     temp_file: &mut File,
 ) -> Result<()> {
+    dotenv::dotenv().ok();
     let file = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
-        .open("generators.json")?;
+        .open(dotenv::var("GENERATORS")?)?;
 
     let generators: Vec<String> = serde_json::from_reader(file)?;
-    let url = generators[generator_type].clone();
+    let url = &generators[generator_type];
     let params = [("text", text), ("speaker", &voice_type.to_string())];
     let client = reqwest::Client::new();
     let voice_query_url = format!("{}/audio_query", url);

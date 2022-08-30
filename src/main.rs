@@ -1,17 +1,17 @@
 mod commands;
 mod handler;
+
 mod lib;
+pub mod listener;
 use dotenv::dotenv;
-use serenity::prelude::GatewayIntents;
-use serenity::Client;
-use serenity::{async_trait, framework::StandardFramework};
+use poise::serenity_prelude as serenity;
+type Context<'a> = poise::Context<'a, Data, anyhow::Error>;
+
 use songbird::{Event, EventContext, SerenityInit};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-
-use crate::handler::Handler;
 
 #[derive(Debug)]
 pub struct Dict {
@@ -20,8 +20,13 @@ pub struct Dict {
 }
 
 struct TrackEndNotifier;
+pub struct Data {
+    pub database: sqlx::SqlitePool,
+    pub read_channel_id: Arc<Mutex<Option<serenity::model::id::ChannelId>>>,
+    pub voice_types: Arc<Mutex<Vec<lib::db::VoiceType>>>,
+}
 
-#[async_trait]
+#[poise::async_trait]
 impl songbird::EventHandler for TrackEndNotifier {
     async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
         if let EventContext::Track(track_list) = ctx {
@@ -36,6 +41,34 @@ impl songbird::EventHandler for TrackEndNotifier {
         }
         None
     }
+}
+#[poise::command(slash_command)]
+async fn connect(ctx: Context<'_>) -> anyhow::Result<()> {
+    let guild_id = ctx.guild_id().unwrap();
+    let author_id = ctx.author().id;
+    let channel_id = ctx
+        .guild()
+        .unwrap()
+        .voice_states
+        .get(&author_id)
+        .unwrap()
+        .channel_id
+        .unwrap();
+
+    let manager = songbird::get(ctx.discord())
+        .await
+        .expect("Songbird Voice client placed in at initialisation.")
+        .clone();
+
+    let (_, err) = manager.join(guild_id, channel_id).await;
+    ctx.say(format!("{:?}", &err)).await?;
+    Ok(())
+}
+
+#[poise::command(prefix_command)]
+async fn register(ctx: Context<'_>) -> anyhow::Result<()> {
+    poise::builtins::register_application_commands_buttons(ctx).await?;
+    Ok(())
 }
 
 #[tokio::main]
@@ -60,28 +93,62 @@ async fn main() {
         .expect("Couldn't get voice types");
     let _application_id: String = std::env::var("APP_ID").unwrap().parse().unwrap();
     let token = std::env::var("DISCORD_TOKEN").expect("environment variable not found");
-    let framework = StandardFramework::new();
-    let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
-    let mut client = Client::builder(&token, intents)
-        .event_handler(Handler {
-            database,
-            read_channel_id: Arc::new(Mutex::new(None)),
-            voice_types: Arc::new(Mutex::new(voice_types)),
+    let framework = poise::Framework::builder()
+        .options(poise::FrameworkOptions {
+            commands: vec![
+                register(),
+                commands::meta::join(),
+                commands::meta::leave(),
+                commands::meta::mute(),
+                commands::meta::unmute(),
+            ],
+            prefix_options: poise::PrefixFrameworkOptions {
+                prefix: Some("~".into()),
+                ..Default::default()
+            },
+            listener: |ctx, event, framework, user_data| {
+                Box::pin(listener::event_listener(ctx, event, framework, user_data))
+            },
+            ..Default::default()
         })
-        .framework(framework)
-        .register_songbird()
-        .await
-        .expect("Err creating client");
-    std::fs::create_dir("temp").ok();
+        .token(token)
+        .intents(
+            serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT,
+        )
+        .user_data_setup(move |_ctx, _ready, _framework| {
+            Box::pin(async move {
+                Ok(Data {
+                    database,
+                    read_channel_id: Arc::new(Mutex::new(None)),
+                    voice_types: Arc::new(Mutex::new(voice_types)),
+                })
+            })
+        })
+        .client_settings(songbird::register);
 
-    tokio::spawn(async move {
-        let _ = client
-            .start()
-            .await
-            .map_err(|why| tracing::info!("Client ended: {:?}", why));
-    });
-    tokio::signal::ctrl_c().await.unwrap();
-    std::fs::remove_dir_all("temp").unwrap();
-    std::fs::create_dir("temp").unwrap();
-    tracing::info!("Ctrl-C received, shutting down...");
+    framework.run().await.unwrap();
+    // let framework = StandardFramework::new();
+    // let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
+    // let mut client = Client::builder(&token, intents)
+    //     .event_handler(Handler {
+    //         database,
+    //         read_channel_id: Arc::new(Mutex::new(None)),
+    //         voice_types: Arc::new(Mutex::new(voice_types)),
+    //     })
+    //     .framework(framework)
+    //     .register_songbird()
+    //     .await
+    //     .expect("Err creating client");
+    // std::fs::create_dir("temp").ok();
+
+    // tokio::spawn(async move {
+    //     let _ = client
+    //         .start()
+    //         .await
+    //         .map_err(|why| tracing::info!("Client ended: {:?}", why));
+    // });
+    // tokio::signal::ctrl_c().await.unwrap();
+    // std::fs::remove_dir_all("temp").unwrap();
+    // std::fs::create_dir("temp").unwrap();
+    // tracing::info!("Ctrl-C received, shutting down...");
 }
