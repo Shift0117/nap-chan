@@ -10,9 +10,9 @@ use wana_kana::{is_katakana::is_katakana, to_katakana::to_katakana};
 pub trait TextMessage {
     fn replace_url(&self) -> Self;
     fn remove_spoiler(&self) -> Self;
-    async fn replace_by_dict(&self, database: &sqlx::SqlitePool) -> Self;
+    async fn replace_by_dict<T: DictDB + Sync>(&self, database: &T) -> Self;
     fn remove_custom_emoji(&self) -> Self;
-    async fn make_read_text(&self, database: &sqlx::SqlitePool) -> Self;
+    async fn make_read_text<T: DictDB + Sync>(&self, database: &T) -> Self;
     fn hiraganize(&self) -> Self;
     fn remove_code_block(&self) -> Self;
 }
@@ -26,7 +26,7 @@ impl TextMessage for String {
         let re = regex::Regex::new(r"\|\|[\s\S]*\|\|").unwrap();
         re.replace_all(self, "").to_string()
     }
-    async fn replace_by_dict(&self, database: &sqlx::SqlitePool) -> Self {
+    async fn replace_by_dict<T: DictDB + Sync>(&self, database: &T) -> Self {
         let mut text = self.clone();
         for w in database.get_dict_all().await.unwrap() {
             let before = &w.word;
@@ -85,7 +85,7 @@ impl TextMessage for String {
             self.to_string()
         }
     }
-    async fn make_read_text(&self, database: &sqlx::SqlitePool) -> Self {
+    async fn make_read_text<T: DictDB + Sync>(&self, database: &T) -> Self {
         self.replace_url()
             .remove_spoiler()
             .remove_code_block()

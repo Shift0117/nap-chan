@@ -7,11 +7,11 @@ use poise::serenity_prelude as serenity;
 type Context<'a> = poise::Context<'a, Data, anyhow::Error>;
 
 use songbird::{Event, EventContext};
-use tracing::info;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tracing::info;
 
 #[derive(Debug)]
 pub struct Dict {
@@ -106,7 +106,7 @@ async fn main() {
                 commands::user_config::set_nickname(),
                 commands::user_config::set_voice_type(),
                 commands::dict::add(),
-                commands::dict::rem()
+                commands::dict::rem(),
             ],
             prefix_options: poise::PrefixFrameworkOptions {
                 prefix: Some("~".into()),
@@ -133,7 +133,7 @@ async fn main() {
         .client_settings(songbird::register);
     std::fs::create_dir("temp").ok();
     if let Err(e) = framework.run().await {
-        info!("{:?}",e)
+        info!("{:?}", e)
     };
     std::fs::remove_dir_all("temp").unwrap();
     std::fs::create_dir("temp").unwrap();
