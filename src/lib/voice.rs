@@ -20,6 +20,7 @@ pub struct VoiceOptions<'a, 'b, 'c> {
     voice_type: i64,
     generator_type: i64,
     volume: f32,
+    speed_auto_scaling:bool
 }
 
 impl<'a, 'b, 'c> VoiceOptions<'a, 'b, 'c> {
@@ -31,7 +32,12 @@ impl<'a, 'b, 'c> VoiceOptions<'a, 'b, 'c> {
             voice_type: 0,
             generator_type: 0,
             volume: 1.,
+            speed_auto_scaling:false
         }
+    }
+    pub fn speed_auto_scaling(&mut self,flag:bool) -> &mut Self {
+        self.speed_auto_scaling = flag;
+        self
     }
     pub fn read_name(&mut self, read_name: Option<&'c String>) -> &mut Self {
         self.read_name = read_name;

@@ -30,14 +30,14 @@ pub async fn event_listener(
 }
 
 async fn ready(ctx: &serenity::Context, ready: &serenity::Ready) {
-    let old_global_commands = ctx.http.get_global_application_commands().await.unwrap();
-    for command in old_global_commands {
-        dbg!(command.name);
-        ctx.http
-            .delete_global_application_command(command.id.0)
-            .await
-            .unwrap();
-    }
+    // let old_global_commands = ctx.http.get_global_application_commands().await.unwrap();
+    // for command in old_global_commands {
+    //     dbg!(command.name);
+    //     ctx.http
+    //         .delete_global_application_command(command.id.0)
+    //         .await
+    //         .unwrap();
+    // }
     info!("{} is connected!", ready.user.name);
 }
 
@@ -79,6 +79,7 @@ async fn message(ctx: &serenity::Context, message: &serenity::Message, user_data
                     .read_name(Some(&nickname))
                     .generator_type(generator_type)
                     .voice_type(voice_type)
+                    .speed_auto_scaling(true)
                     .play_voice(ctx, guild.id, message.content.clone())
                     .await
                 {
