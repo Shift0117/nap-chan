@@ -29,7 +29,7 @@ use crate::{
     lib::{
         db::{UserConfigDB, VoiceType},
         text::TextMessage,
-        voice::{play_raw_voice, play_voice},
+        voice::{play_raw_voice, play_voice, play_voice_by_web_voicevox_api},
     },
 };
 
@@ -208,7 +208,7 @@ impl EventHandler for Handler {
         if read_channel_id == Some(text_channel_id) {
             if let Some(_voice_channel_id) = voice_channel_id {
                 if msg.author.id != bot_id {
-                    if let Err(e) = play_voice(&ctx, msg, self).await {
+                    if let Err(e) = play_voice_by_web_voicevox_api(&ctx, msg, self).await {
                         info!("{}", e)
                     };
                 };

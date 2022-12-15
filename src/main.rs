@@ -55,7 +55,7 @@ async fn main() {
         .run(&database)
         .await
         .expect("Couldn't run database migrations");
-    let voice_types = lib::db::get_voice_types()
+    let voice_types = lib::db::get_voice_types_by_web_voicevox_api()
         .await
         .expect("Couldn't get voice types");
     let _application_id: String = std::env::var("APP_ID").unwrap().parse().unwrap();
