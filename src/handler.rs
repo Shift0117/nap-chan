@@ -29,7 +29,7 @@ use crate::{
     lib::{
         db::{UserConfigDB, VoiceType},
         text::TextMessage,
-        voice::{play_raw_voice, play_voice, play_voice_by_web_voicevox_api},
+        voice::{play_raw_voice, play_voice, play_voice_by_web_voicevox_api, play_raw_voice_by_web_voicevox_api},
     },
 };
 
@@ -178,7 +178,7 @@ impl EventHandler for Handler {
                 .make_read_text(&self.database)
                 .await;
             let voice_type = user_config.voice_type.try_into().unwrap();
-            if let Err(e) = play_raw_voice(
+            if let Err(e) = play_raw_voice_by_web_voicevox_api(
                 &ctx,
                 &text,
                 voice_type,
@@ -257,7 +257,7 @@ impl EventHandler for Handler {
                             let generator_type = content
                                 .generator_type
                                 .unwrap_or(user_config.generator_type as usize);
-                            if let Err(e) = play_raw_voice(
+                            if let Err(e) = play_raw_voice_by_web_voicevox_api(
                                 &ctx,
                                 &msg,
                                 voice_type,
