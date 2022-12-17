@@ -1,5 +1,9 @@
 use crate::{
-    lib::{db::UserConfigDB, text::TextMessage, voice::VoiceOptions},
+    lib::{
+        db::UserConfigDB,
+        text::TextMessage,
+        voice::{TextOptions, VoiceOptions, WebVoiceVoxAPI},
+    },
     Data,
 };
 use anyhow::{anyhow, Result};
@@ -70,17 +74,27 @@ async fn message(ctx: &serenity::Context, message: &serenity::Message, user_data
         .and_then(|voice_states| voice_states.channel_id);
     let text_channel_id = message.channel_id;
     let read_channel_id = *user_data.read_channel_id.lock().await;
+    dotenv::dotenv();
+    let api_key = std::env::var("API_KEY").unwrap();
+    let web = WebVoiceVoxAPI::new(
+        "https://api.su-shiki.com/v2/voicevox/audio/".to_string(),
+        api_key,
+        voice_type,
+    );
+    let text = TextOptions::new()
+        .clean(Some(&serenity::ContentSafeOptions::new()))
+        .dict(Some(&user_data.database))
+        .read_name(Some(&nickname))
+        .format(&ctx.cache, message.content.clone())
+        .await;
     if read_channel_id == Some(text_channel_id) {
         if let Some(_voice_channel_id) = voice_channel_id {
             if message.author.id != bot_id {
-                if let Err(e) = VoiceOptions::new()
-                    .clean(Some(&serenity::ContentSafeOptions::new()))
-                    .dict(Some(&user_data.database))
-                    .read_name(Some(&nickname))
+                if let Err(e) = VoiceOptions::new(web)
                     .generator_type(generator_type)
                     .voice_type(voice_type)
                     .speed_auto_scaling(true)
-                    .play_voice(ctx, guild.id, message.content.clone())
+                    .play_voice(ctx, guild.id, text)
                     .await
                 {
                     info!("error: {}", e)
@@ -185,7 +199,19 @@ async fn voice_state_update(
         .await;
     let voice_type = user_config.voice_type;
     let generator_type = user_config.generator_type;
-    if let Err(e) = VoiceOptions::new()
+    dotenv::dotenv();
+    let api_key = std::env::var("API_KEY")?;
+    let web = WebVoiceVoxAPI::new(
+        "https://api.su-shiki.com/v2/voicevox/audio/".to_string(),
+        api_key,
+        voice_type,
+    );
+    let text = TextOptions::new()
+        .clean(Some(&serenity::ContentSafeOptions::new()))
+        .dict(Some(&user_data.database))
+        .format(&ctx.cache, text)
+        .await;
+    if let Err(e) = VoiceOptions::new(web)
         .voice_type(voice_type)
         .generator_type(generator_type)
         .play_voice(ctx, guild_id, text)

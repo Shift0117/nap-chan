@@ -5,7 +5,7 @@ use tracing::info;
 
 use crate::Dict;
 use anyhow::{anyhow, Result};
-
+const VOICEVOX: i64 = 0;
 #[async_trait]
 pub trait UserConfigDB {
     async fn get_user_config_or_default(&self, user_id: i64) -> Result<UserConfig>;
@@ -127,6 +127,50 @@ impl DictDB for sqlx::SqlitePool {
         tx.commit().await?;
         Ok(())
     }
+}
+
+pub async fn get_voice_types_by_web_voicevox_api() -> Result<Vec<VoiceType>> {
+    #[derive(Deserialize, Clone, Debug)]
+    struct Style {
+        pub name: String,
+        pub id: u64,
+    }
+    #[derive(Deserialize, Clone, Debug)]
+    struct Speaker {
+        pub name: String,
+        pub styles: Vec<Style>,
+    }
+
+    let mut voice_types = Vec::new();
+
+    dotenv::dotenv().ok();
+    let speakers: Result<Vec<Speaker>> = async {
+        let api_key = std::env::var("WEB_API_KEY")?;
+        let query_url = "https://api.su-shiki.com/v2/voicevox/speakers/";
+        let client = reqwest::Client::new();
+        let res = client
+            .get(query_url)
+            .query(&[("key", api_key)])
+            .send()
+            .await?;
+        res.json().await.map_err(|e| e.into())
+    }
+    .await;
+    info!("{:?}", &speakers);
+    if let Ok(speakers) = speakers {
+        for speaker in speakers {
+            for style in speaker.styles {
+                voice_types.push(VoiceType {
+                    name: speaker.name.clone(),
+                    style_id: style.id,
+                    style_name: style.name,
+                    generator_type: VOICEVOX,
+                });
+            }
+        }
+    }
+
+    Ok(voice_types)
 }
 
 pub async fn get_voice_types() -> Result<Vec<VoiceType>> {
