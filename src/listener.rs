@@ -75,7 +75,7 @@ async fn message(ctx: &serenity::Context, message: &serenity::Message, user_data
     let text_channel_id = message.channel_id;
     let read_channel_id = *user_data.read_channel_id.lock().await;
     dotenv::dotenv();
-    let api_key = std::env::var("API_KEY").unwrap();
+    let api_key = std::env::var("WEB_API_KEY").unwrap();
     let web = WebVoiceVoxAPI::new(
         "https://api.su-shiki.com/v2/voicevox/audio/".to_string(),
         api_key,
