@@ -1,76 +1,62 @@
-use std::sync::Arc;
-
 use crate::TrackEndNotifier;
+type Context<'a> = poise::Context<'a, crate::Data, anyhow::Error>;
 use anyhow::{anyhow, Result};
-use serenity::{
-    client::Context,
-    model::{
-        application::interaction::application_command::ApplicationCommandInteraction,
-        id::{ChannelId, GuildId},
-    },
-};
 use songbird::{Event, TrackEvent};
-use tokio::sync::Mutex;
-
-pub async fn join(
-    ctx: &Context,
-    command: &ApplicationCommandInteraction,
-    read_channel_id: &Arc<Mutex<Option<ChannelId>>>,
-) -> Result<()> {
-    let guild_id = command
-        .guild_id
+#[poise::command(slash_command, description_localized("ja", "VCに参加します"))]
+pub async fn join(ctx: Context<'_>) -> Result<()> {
+    let guild_id = ctx
+        .guild_id()
         .ok_or_else(|| anyhow!("guild id not found"))?;
-    let author_id = command
-        .member
-        .as_ref()
-        .ok_or_else(|| anyhow!("member not found"))?
-        .user
-        .id;
-    let text_channel_id = command.channel_id;
-    let channel_id = guild_id
-        .to_guild_cached(&ctx.cache)
+    let author_id = ctx.author().id;
+    let text_channel_id = ctx.channel_id();
+    let voice_channel_id = ctx
+        .guild()
         .ok_or_else(|| anyhow!("guild not found"))?
         .voice_states
         .get(&author_id)
-        .ok_or_else(|| anyhow!("author not found"))?
+        .ok_or_else(|| anyhow!("author not in voice channel"))?
         .channel_id
-        .ok_or_else(|| anyhow!("channel id not found"))?;
-    let connect_to = channel_id;
-    let manager = songbird::get(ctx)
+        .ok_or_else(|| anyhow!("channel not found"))?;
+
+    let manager = songbird::get(ctx.discord())
         .await
-        .ok_or_else(|| anyhow!("Songbird Voice client placed in at initialisation."))?
-        .clone();
-    let (handle_lock, _) = manager.join(guild_id, connect_to).await;
+        .ok_or_else(|| anyhow!("Songbird Voice client placed in at initialisation."))?;
+    let (handle_lock, err) = manager.join(guild_id, voice_channel_id).await;
+    err?;
     let mut handle = handle_lock.lock().await;
     handle.deafen(true).await?;
     handle.add_global_event(Event::Track(TrackEvent::End), TrackEndNotifier);
-    *read_channel_id.lock().await = Some(text_channel_id);
+    *ctx.data().read_channel_id.lock().await = Some(text_channel_id);
+    ctx.say("こんにちは").await?;
     Ok(())
 }
 
-pub async fn leave(ctx: &Context, guild_id: GuildId) -> Result<()> {
-    let manager = songbird::get(ctx)
+#[poise::command(slash_command, description_localized("ja", "VCから抜けます"))]
+pub async fn leave(ctx: Context<'_>) -> Result<()> {
+    let guild_id = ctx
+        .guild_id()
+        .ok_or_else(|| anyhow!("guild id not found"))?;
+    let manager = songbird::get(ctx.discord())
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
-        .clone();
-
+        .ok_or_else(|| anyhow!("Songbird Voice client placed in at initialisation."))?;
     let has_handler = manager.get(guild_id).is_some();
     if has_handler {
         manager.remove(guild_id).await?;
+        ctx.say("ばいばい").await?;
         Ok(())
     } else {
         Err(anyhow!("ボイスチャンネルに入ってないよ"))
     }
 }
 
-pub async fn mute(ctx: &Context, command: &ApplicationCommandInteraction) -> Result<()> {
-    let guild_id = command
-        .guild_id
+#[poise::command(slash_command, description_localized("ja", "botをミュートします"))]
+pub async fn mute(ctx: Context<'_>) -> Result<()> {
+    let guild_id = ctx
+        .guild_id()
         .ok_or_else(|| anyhow!("guild id not found"))?;
-    let manager = songbird::get(ctx)
+    let manager = songbird::get(ctx.discord())
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
-        .clone();
+        .ok_or_else(|| anyhow!("Songbird Voice client placed in at initialisation."))?;
     let handler_lock = manager
         .get(guild_id)
         .ok_or_else(|| anyhow!("ボイスチャンネルに入ってないよ"))?;
@@ -81,18 +67,22 @@ pub async fn mute(ctx: &Context, command: &ApplicationCommandInteraction) -> Res
     } else if let Err(e) = handler.mute(true).await {
         Err(e.into())
     } else {
+        ctx.say("ミュートしたよ").await?;
         Ok(())
     }
 }
 
-pub async fn unmute(ctx: &Context, command: &ApplicationCommandInteraction) -> Result<()> {
-    let guild_id = command
-        .guild_id
+#[poise::command(
+    slash_command,
+    description_localized("ja", "botのミュートを解除します")
+)]
+pub async fn unmute(ctx: Context<'_>) -> Result<()> {
+    let guild_id = ctx
+        .guild_id()
         .ok_or_else(|| anyhow!("guild id not found"))?;
-    let manager = songbird::get(ctx)
+    let manager = songbird::get(ctx.discord())
         .await
-        .expect("Songbird Voice client placed in at initialisation.")
-        .clone();
+        .ok_or_else(|| anyhow!("Songbird Voice client placed in at initialisation."))?;
     let handler_lock = manager
         .get(guild_id)
         .ok_or_else(|| anyhow!("ボイスチャンネルに入ってないよ"))?;
@@ -100,6 +90,7 @@ pub async fn unmute(ctx: &Context, command: &ApplicationCommandInteraction) -> R
     if let Err(e) = handler.mute(false).await {
         Err(e.into())
     } else {
+        ctx.say("ミュート解除したよ").await?;
         Ok(())
     }
 }

@@ -140,13 +140,12 @@ pub async fn get_voice_types() -> Result<Vec<VoiceType>> {
         pub name: String,
         pub styles: Vec<Style>,
     }
-
+    dotenv::dotenv().ok();
     let file = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
-        .open("generators.json")?;
-
+        .open(dotenv::var("GENERATORS")?)?;
     let generators: Vec<String> = serde_json::from_reader(file)?;
 
     info!("generators = {:?}", &generators);
