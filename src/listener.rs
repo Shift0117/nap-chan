@@ -199,7 +199,7 @@ async fn voice_state_update(
     let voice_type = user_config.voice_type;
     let generator_type = user_config.generator_type;
     dotenv::dotenv();
-    let api_key = std::env::var("API_KEY")?;
+    let api_key = std::env::var("WEB_API_KEY")?;
     let web = WebVoiceVoxAPI::new(
         "https://api.su-shiki.com/v2/voicevox/audio/".to_string(),
         api_key,
