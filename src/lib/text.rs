@@ -74,16 +74,16 @@ impl TextMessage for String {
     fn remove_custom_emoji(&self) -> Self {
         let re = regex::Regex::new(r"<a?:.+?:.+?>").unwrap();
         let num = regex::Regex::new(r":[0-9]+>").unwrap();
-        if let Some(cap) = re.captures(self) {
+        let mut text = self.to_string();
+        while let Some(cap) = re.captures(&text) {
             let cap = cap.get(0).unwrap();
             let str = cap.as_str();
             info!("{}", str);
             let str = num.replace_all(str, "").to_string()[2..].to_string();
             info!("{}", str);
-            re.replace_all(self, str).to_string()
-        } else {
-            self.to_string()
+            text = re.replace(&text, str).to_string();
         }
+        text
     }
     async fn make_read_text<T: DictDB + Sync>(&self, database: &T) -> Self {
         self.replace_url()

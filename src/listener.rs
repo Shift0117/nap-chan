@@ -87,6 +87,7 @@ async fn message(ctx: &serenity::Context, message: &serenity::Message, user_data
         .read_name(Some(&nickname))
         .format(&ctx.cache, message.content.clone())
         .await;
+    dbg!(&text);
     if read_channel_id == Some(text_channel_id) {
         if let Some(_voice_channel_id) = voice_channel_id {
             if message.author.id != bot_id {
