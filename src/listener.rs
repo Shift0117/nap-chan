@@ -91,8 +91,6 @@ async fn message(ctx: &serenity::Context, message: &serenity::Message, user_data
         if let Some(_voice_channel_id) = voice_channel_id {
             if message.author.id != bot_id {
                 if let Err(e) = VoiceOptions::new(web)
-                    .generator_type(generator_type)
-                    .voice_type(voice_type)
                     .speed_auto_scaling(true)
                     .play_voice(ctx, guild.id, text)
                     .await
@@ -212,8 +210,6 @@ async fn voice_state_update(
         .format(&ctx.cache, text)
         .await;
     if let Err(e) = VoiceOptions::new(web)
-        .voice_type(voice_type)
-        .generator_type(generator_type)
         .play_voice(ctx, guild_id, text)
         .await
     {

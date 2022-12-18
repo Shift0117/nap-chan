@@ -16,8 +16,6 @@ use super::text::TextMessage;
 #[derive(Debug)]
 pub struct VoiceOptions<T: VoiceGenerator> {
     generator: T,
-    voice_type: i64,
-    generator_type: i64,
     volume: f32,
     speed_auto_scaling: bool,
 }
@@ -145,8 +143,6 @@ impl<T: VoiceGenerator> VoiceOptions<T> {
     pub fn new(voice_generator: T) -> Self {
         Self {
             generator: voice_generator,
-            voice_type: 0,
-            generator_type: 0,
             volume: 1.,
             speed_auto_scaling: false,
         }
@@ -155,14 +151,7 @@ impl<T: VoiceGenerator> VoiceOptions<T> {
         self.speed_auto_scaling = flag;
         self
     }
-    pub fn voice_type(&mut self, voice_type: i64) -> &mut Self {
-        self.voice_type = voice_type;
-        self
-    }
-    pub fn generator_type(&mut self, generator_type: i64) -> &mut Self {
-        self.generator_type = generator_type;
-        self
-    }
+
 
     pub async fn play_voice<'a, 'b, 'c>(
         &self,
