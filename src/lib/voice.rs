@@ -152,7 +152,6 @@ impl<T: VoiceGenerator> VoiceOptions<T> {
         self
     }
 
-
     pub async fn play_voice<'a, 'b, 'c>(
         &self,
         ctx: &Context,
@@ -164,7 +163,9 @@ impl<T: VoiceGenerator> VoiceOptions<T> {
             return Ok(());
         }
         let mut temp_file = tempfile::Builder::new().tempfile_in("temp")?;
-        self.generator.create_voice(&str, temp_file.as_file_mut()).await?;
+        self.generator
+            .create_voice(&str, temp_file.as_file_mut())
+            .await?;
 
         let (_, path) = temp_file.keep()?;
         let manager = songbird::get(ctx)

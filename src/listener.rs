@@ -209,10 +209,7 @@ async fn voice_state_update(
         .dict(Some(&user_data.database))
         .format(&ctx.cache, text)
         .await;
-    if let Err(e) = VoiceOptions::new(web)
-        .play_voice(ctx, guild_id, text)
-        .await
-    {
+    if let Err(e) = VoiceOptions::new(web).play_voice(ctx, guild_id, text).await {
         info!("{}", e);
     };
     Ok(())
